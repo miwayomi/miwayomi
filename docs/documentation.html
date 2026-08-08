@@ -384,6 +384,15 @@ cp lang/en.json lang/fr.json
       <li>JDK 21 (Temurin recommended). Gradle downloads itself via the wrapper.</li>
       <li>Chrome/Chromium only if you want to solve Cloudflare challenges manually.</li>
     </ul>
+    <h3>Runnable JAR (any OS) — easiest</h3>
+    <p>Download the cross-platform JAR from the
+    <a href="https://github.com/miwayomi/miwayomi/releases">Releases</a> page (you only need JDK 21).</p>
+    <pre><span class="c"># Linux / macOS</span>
+java -jar miwayomi-all.jar --data ./data --port 4567
+
+<span class="c"># Windows (PowerShell / CMD)</span>
+java -jar miwayomi-all.jar --data %cd%\data --port 4567</pre>
+    <p>FlareSolverr is <b>enabled by default</b> at <code>http://127.0.0.1:8191</code>; if it is not running, Cloudflare challenges fall back to the manual modal. Open <code>http://localhost:4567</code>.</p>
     <h3>Lightweight build (recommended for a VPS)</h3>
     <pre>./gradlew :server:installDist
 ./gradlew --stop                <span class="c"># frees the Gradle daemons (RAM)</span>
