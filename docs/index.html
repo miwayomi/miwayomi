@@ -23,7 +23,9 @@
     border-bottom: 1px solid var(--border);
   }
   .topbar .brand { font-weight: 800; font-size: 19px; display: flex; align-items: center; gap: 9px; }
-  .topbar .brand::before { content: ""; width: 10px; height: 20px; border-radius: 3px; background: linear-gradient(180deg, var(--accent-hi), var(--accent)); }
+  .avatar { border-radius: 50%; object-fit: cover; }
+  .topbar .brand .avatar { width: 26px; height: 26px; border: 2px solid var(--accent); }
+  .hero .avatar { width: 96px; height: 96px; border: 3px solid var(--accent); box-shadow: 0 8px 24px rgba(244,117,33,.35); margin-bottom: 6px; }
   .topbar .links { margin-left: auto; display: flex; gap: 4px; }
   .topbar .links a { color: var(--muted); font-weight: 600; font-size: 13.5px; padding: 8px 12px; border-radius: 8px; }
   .topbar .links a:hover { color: var(--accent); background: #f4f5fa; text-decoration: none; }
@@ -58,7 +60,7 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">miwayomi</div>
+  <div class="brand"><img class="avatar" src="https://avatars.githubusercontent.com/u/117120691?size=64" alt="miwayomi"> miwayomi</div>
   <nav class="links">
     <a href="index.html">Home</a>
     <a href="documentation.html">Docs</a>
@@ -67,6 +69,7 @@
 
 <main>
   <div class="hero">
+    <img class="avatar" src="https://avatars.githubusercontent.com/u/117120691?size=256" alt="miwayomi">
     <h1>miwayomi<span class="dot">.</span></h1>
     <p>A self-contained server that runs Aniyomi/Tachiyomi-format catalog extensions on the JVM — no Android, no emulator, no cloud.</p>
     <div class="cta">
