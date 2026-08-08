@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     application
+    id("com.gradleup.shadow") version "8.3.5"
 }
 
 application {
@@ -34,4 +35,16 @@ dependencies {
     implementation("de.femtopedia.dex2jar:dex-tools:2.4.38")
 
     implementation("net.dongliu:apk-parser:2.6.10")
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("miwayomi")
+    archiveClassifier.set("all")
+    archiveVersion.set("")
+    mergeServiceFiles()
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    manifest {
+        attributes["Main-Class"] = "miwayomi.MainKt"
+        attributes["Multi-Release"] = "true"
+    }
 }
