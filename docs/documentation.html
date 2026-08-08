@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>miwayomi · Documentation</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --border: #e4e7ef;
+    --text: #1c2130;
+    --muted: #6b7280;
+    --accent: #f47521;
+    --accent-hi: #ff8c3b;
+    --code-bg: #14141a;
+    --code-text: #e8e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 0 26px; height: 58px;
+    background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar .brand { font-weight: 800; font-size: 19px; display: flex; align-items: center; gap: 9px; }
+  .topbar .brand::before { content: ""; width: 10px; height: 20px; border-radius: 3px; background: linear-gradient(180deg, var(--accent-hi), var(--accent)); }
+  .topbar .links { margin-left: auto; display: flex; gap: 4px; }
+  .topbar .links a { color: var(--muted); font-weight: 600; font-size: 13.5px; padding: 8px 12px; border-radius: 8px; }
+  .topbar .links a:hover { color: var(--accent); background: #f4f5fa; text-decoration: none; }
+
+  .wrap { display: flex; max-width: 1240px; margin: 0 auto; }
+  .toc {
+    width: 240px; min-width: 240px;
+    padding: 26px 12px 40px 18px;
+    position: sticky; top: 58px; align-self: flex-start;
+    height: calc(100vh - 58px); overflow-y: auto;
+    font-size: 13px;
+  }
+  .toc h4 { margin: 0 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+  .toc a { display: block; color: var(--muted); padding: 5px 8px; border-radius: 6px; }
+  .toc a:hover { color: var(--accent); background: #fff; text-decoration: none; }
+
+  main { flex: 1; min-width: 0; padding: 30px 36px 80px; }
+  .hero {
+    background: linear-gradient(135deg, #14141a, #20202a);
+    color: #fff; border-radius: 18px; padding: 40px 38px; margin-bottom: 34px;
+  }
+  .hero h1 { margin: 0 0 8px; font-size: 40px; font-weight: 800; letter-spacing: -0.5px; }
+  .hero h1 .dot { color: var(--accent-hi); }
+  .hero p { margin: 0; color: #c6c6d4; max-width: 640px; }
+  .hero .pill { display: inline-block; margin-top: 16px; background: rgba(244,117,33,.18); border: 1px solid rgba(244,117,33,.5); color: var(--accent-hi); border-radius: 20px; padding: 4px 14px; font-size: 12.5px; font-weight: 600; }
+
+  h2 { margin: 48px 0 14px; font-size: 26px; font-weight: 800; letter-spacing: -0.3px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+  h3 { margin: 28px 0 10px; font-size: 18px; font-weight: 700; }
+  h4 { margin: 20px 0 8px; font-size: 15px; font-weight: 700; }
+  p { margin: 10px 0; }
+  ul, ol { margin: 10px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+
+  .note { background: #fff7ed; border: 1px solid #ffd9b0; border-left: 4px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin: 16px 0; font-size: 14px; }
+
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+  th { text-align: left; background: #f1f3f9; padding: 10px 12px; font-weight: 700; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  pre { background: var(--code-bg); color: var(--code-text); border-radius: 12px; padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 14px 0; }
+  code { font-family: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.92em; background: #eef0f6; color: #b45309; padding: 2px 6px; border-radius: 6px; }
+  pre code { background: none; color: inherit; padding: 0; }
+  pre .c { color: #6b7280; }
+  pre .s { color: #9be09b; }
+  pre .k { color: #ff9e64; }
+
+  .shot { border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 30px rgba(20,20,26,.12); max-width: 100%; margin: 14px 0; display: block; }
+  .shot-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0; }
+  .shot-row figure { flex: 1 1 260px; min-width: 240px; margin: 0; }
+  .shot-row img { width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(20,20,26,.1); }
+  .shot-row figcaption { font-size: 12.5px; color: var(--muted); text-align: center; margin-top: 6px; }
+
+  .shot, .shot-row img { cursor: zoom-in; }
+  .lightbox {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0, 0, 0, 0.88);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65); }
+  .lightbox .lb-close { position: absolute; top: 14px; right: 22px; color: #fff; font-size: 40px; line-height: 1; cursor: pointer; opacity: 0.85; }
+  .lightbox .lb-close:hover { opacity: 1; }
+  .lightbox .lb-cap { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; color: #cfd0d8; font-size: 13px; }
+
+  .filetree { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; font-family: "SF Mono", ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+  .filetree .cm { color: var(--muted); }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 14px 0; }
+  .card2 { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card2 h4 { margin: 0 0 8px; }
+
+  @media (max-width: 900px) { .toc { display: none; } main { padding: 20px; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">miwayomi <span style="color:var(--accent)">·</span> Docs</div>
+  <nav class="links">
+    <a href="/">← Web UI</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/api/v1/health">API</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <nav class="toc">
+    <h4>Contents</h4>
+    <a href="#story">The story</a>
+    <a href="#what">What it is</a>
+    <a href="#philosophy">Design philosophy</a>
+    <a href="#requirements">Technical requirements</a>
+    <a href="#how">How it works</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#codebase">Codebase map</a>
+    <a href="#api">REST API</a>
+    <a href="#webui">The Web UI</a>
+    <a href="#customizing">Customizing the UI</a>
+    <a href="#build">Build &amp; run</a>
+    <a href="#extension">Your own extension</a>
+    <a href="#streaming">Streaming</a>
+    <a href="#cloudflare">Cloudflare</a>
+    <a href="#persistence">Persistence</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="#glossary">Glossary</a>
+    <a href="#legal">Legal notice</a>
+  </nav>
+
+  <main>
+
+    <div class="hero">
+      <h1>miwayomi<span class="dot">.</span></h1>
+      <p>A self-contained server that runs <b>Aniyomi/Tachiyomi-format catalog extensions</b> on the JVM — with no Android device, no emulator, no cloud. This page documents everything: how it works, its technical requirements, its API, and how to make it yours.</p>
+      <span class="pill">mi·wa·yo·mi — “beautiful reading”</span>
+    </div>
+
+    <h2 id="story">The story behind the name</h2>
+    <p>Every project deserves a story, and miwayomi got a good one by accident. It started the way most self-hosted projects start: with a problem and a grudge. The original plan was modest — a self-hosted anime player. It was meant to sit on top of <a href="https://github.com/Suwayomi">Suwayomi</a>, but that project kept hanging and crashing, eating RAM and fighting at every turn. After too many nights of a frozen server, the call was made: “fine, I’ll build my own.”</p>
+    <p>So miwayomi was rebuilt from a different angle — a lean execution engine modeled on the ideas of <b>Aniyomi</b> (itself born from <b>Tachiyomi</b>): the same extension format and the same familiar source API, but reimagined as a pure JVM service that needs no Android at all.</p>
+    <p>The name came from a manga. A character named <b>Miwa</b> caught the eye — it just <i>sounded</i> right — and turned into <b>miwayomi</b> without knowing what it meant. When it was finally looked up, it turned out to mean roughly <b>“beautiful reading”</b> (mi + yomi). A happy accident, and the best kind: the name picked the project before the project picked the name.</p>
+
+    <h2 id="what">What miwayomi is (and is not)</h2>
+    <table>
+      <tr><th>miwayomi is</th><th>miwayomi is not</th></tr>
+      <tr><td>An execution engine for Tachiyomi/Aniyomi-format extensions</td><td>A content host or “piracy box”</td></tr>
+      <tr><td>A JVM server (Ktor) that runs extensions without Android</td><td>An emulator or a phone-in-the-cloud</td></tr>
+      <tr><td>A REST API + web UI over your installed sources</td><td>A fork, rebrand, or replacement of any client</td></tr>
+      <tr><td>A teaching tool: learn to write your own compatible sources</td><td>A distributor of extensions or copyrighted media</td></tr>
+    </table>
+    <div class="note"><b>Core rule:</b> extensions are third-party software. miwayomi runs them and exposes their catalogs. Whatever a source does, it does on its own behalf. You are responsible for the extensions you install and the content you access.</div>
+
+    <h2 id="philosophy">Design philosophy</h2>
+    <ul>
+      <li><b>No Android required.</b> The <code>android-compat</code> module makes extensions believe there is an Android runtime. In reality there is none — just a carefully crafted shim on a plain JVM.</li>
+      <li><b>Lightweight by default.</b> A single <code>java</code> process with a small heap and serial GC. Measured footprint: ~160–170 MB RSS at rest — comfortable on a 4 GB VPS.</li>
+      <li><b>Generic, not special-cased.</b> The extension pipeline is format-driven: if an APK declares a source, miwayomi can load it.</li>
+      <li><b>Chunked, memory-neutral streaming.</b> Media is streamed in 64 KB chunks; nothing is buffered whole into RAM.</li>
+      <li><b>Persistence that survives restarts.</b> Cookies, resolved Cloudflare hosts, favorites, and reading progress live in SQLite.</li>
+      <li><b>Respect for the sites.</b> The proxy forwards the exact headers each source needs. Cloudflare challenges are resolved by you — your browser, your decision.</li>
+    </ul>
+
+    <h2 id="requirements">Technical requirements</h2>
+    <table>
+      <tr><th>Requirement</th><th>Minimum</th><th>Notes</th></tr>
+      <tr><td>JDK</td><td>21 (Temurin recommended)</td><td>Gradle downloads itself via the wrapper.</td></tr>
+      <tr><td>RAM</td><td>~512 MB heap</td><td>Runs with <code>-Xmx512m</code>; measured ~160–170 MB RSS at rest. Adjust with <code>MIWAYOMI_MEM</code>.</td></tr>
+      <tr><td>Disk</td><td>A few hundred MB</td><td>Extensions (.apk + converted .jar), image cache, SQLite DB.</td></tr>
+      <tr><td>Chrome/Chromium</td><td>Optional</td><td>Only needed to solve Cloudflare challenges manually (bundled one or <code>--chrome</code>).</td></tr>
+      <tr><td>FlareSolverr</td><td>Optional</td><td>For automatic Cloudflare solving; falls back to the manual modal.</td></tr>
+      <tr><td>OS</td><td>Linux / macOS / Windows</td><td>JVM-based; tested on Linux.</td></tr>
+      <tr><td>Port</td><td>4567 (default)</td><td>Configurable with <code>--port</code>.</td></tr>
+    </table>
+    <h3>Build toolchain</h3>
+    <ul>
+      <li><b>Kotlin 2.2.0</b> · JVM 21 · Gradle 8.10.2 (wrapper).</li>
+      <li><b>Ktor 3.2.3</b> (Netty) — HTTP server.</li>
+      <li><b>SQLite</b> (sqlite-jdbc) — local persistence.</li>
+      <li><b>ASM + dex2jar + apk-parser</b> — the extension pipeline.</li>
+      <li><b>GraalJS</b> — QuickJs/Duktape stand-ins.</li>
+      <li><b>Injekt</b> — dependency injection.</li>
+    </ul>
+
+    <h2 id="how">How it works</h2>
+    <p>Tachiyomi/Aniyomi extensions are APK files that announce their catalog classes in the manifest under <code>meta-data</code> (<code>tachiyomi.extension.class</code> / <code>tachiyomi.animeextension.class</code>). miwayomi turns those APKs into runnable sources on the JVM:</p>
+    <pre>APK extension
+  → 1. apk-parser reads AndroidManifest.xml
+  → 2. dex2jar converts classes.dex to a .jar
+  → 3. JarFixer repairs bytecode (stackmap frames, constructors, phantom classes)
+  → 4. ChildFirstURLClassLoader loads the classes
+  → 5. SourceFactory / Source instantiated &amp; registered
+  → 6. REST API + WebUI expose every catalog</pre>
+    <p>Because the mechanism is generic, it works for any extension in that format — the format is the contract, not the vendor.</p>
+
+    <h2 id="architecture">Architecture</h2>
+    <table>
+      <tr><th>Module</th><th>Role</th></tr>
+      <tr><td><code>android-compat/</code></td><td>Minimal Android shim: the <code>android.*</code>/<code>androidx.*</code> classes extensions reference, plus the build-time <code>android.jar</code> stub.</td></tr>
+      <tr><td><code>core-common/</code></td><td>The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine.</td></tr>
+      <tr><td><code>source-api/</code></td><td>The Aniyomi source API compiled for the JVM: source interfaces and models extensions implement.</td></tr>
+      <tr><td><code>server/</code></td><td>The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI.</td></tr>
+      <tr><td><code>data/</code></td><td>Runtime data: <code>data/extensions/*.apk</code> (+ converted <code>.jar</code>), preferences, SQLite + image cache.</td></tr>
+    </table>
+
+    <h2 id="codebase">Codebase map (file by file)</h2>
+    <h3>server/ — the application</h3>
+    <div class="filetree">server/src/main/kotlin/miwayomi/
+├── Main.kt                  <span class="cm">Entry point: args, DI, Ktor.</span>
+├── Config.kt                <span class="cm">ServerConfig + CLI (--port, --data, --flaresolverr, --chrome).</span>
+├── di/                      <span class="cm">AppModule (Injekt) + ConfigHolder.</span>
+├── source/SourceManagers.kt <span class="cm">Manga/Anime source registries.</span>
+├── extension/
+│   ├── ExtensionManager.kt  <span class="cm">Loads/unloads APKs, tracks packages, uninstall.</span>
+│   ├── PackageTools.kt      <span class="cm">apk-parser, dex2jar, class-name resolution.</span>
+│   ├── JarFixer.kt          <span class="cm">ASM bytecode repair for the JVM.</span>
+│   └── ChildFirstURLClassLoader.kt
+├── builtin/                 <span class="cm">DemoSource (offline) + MockCfSource.</span>
+├── cf/                      <span class="cm">CfBrowser + CdpClient (manual Cloudflare).</span>
+└── api/
+    ├── ApiRoutes.kt         <span class="cm">Plugins, static, /health, /sources, sub-routers.</span>
+    ├── MangaRoutes.kt       <span class="cm">Manga catalog endpoints.</span>
+    ├── AnimeRoutes.kt       <span class="cm">Anime catalog/episodes/videos endpoints.</span>
+    ├── StreamingRoutes.kt   <span class="cm">/proxy /hls /dash /dashseg + image cache.</span>
+    ├── StreamProxy.kt       <span class="cm">HLS/DASH manifest rewriting.</span>
+    ├── ProxyHelpers.kt      <span class="cm">Header parsing, per-source clients, URL normalization.</span>
+    ├── MimeTypes.kt         <span class="cm">MIME inference when the CDN lies.</span>
+    ├── ImageCache.kt        <span class="cm">Disk cache for proxied images.</span>
+    ├── ExtensionRoutes.kt   <span class="cm">Repo index (JSON + protobuf), install/uninstall.</span>
+    ├── SourcePrefsRoutes.kt <span class="cm">Source preferences GET/POST.</span>
+    ├── FavoritesRoutes.kt   <span class="cm">Favorites + last-read progress.</span>
+    ├── CfRoutes.kt          <span class="cm">Manual Cloudflare modal endpoints.</span>
+    ├── ApiHelpers.kt        <span class="cm">Shared helpers + chunked proxy stream.</span>
+    ├── Dtos.kt / Mappers.kt <span class="cm">@Serializable models + converters.</span>
+    └── KeiIndexProto.kt     <span class="cm">Protobuf (index.pb, gzip) repo parser.</span></div>
+
+    <h3>core-common/ — the network heart</h3>
+    <div class="filetree">core-common/.../network/
+├── NetworkHelper.kt         <span class="cm">Builds the shared OkHttpClient; owns the SQLite store.</span>
+├── JvmCookieJar.kt          <span class="cm">Persistent cookie jar backed by SQLite.</span>
+├── SqliteStore.kt           <span class="cm">SQLite: kv_store, cookies, favorites.</span>
+├── CookieCodec.kt           <span class="cm">Cookie ↔ row (de)serialization.</span>
+├── CfResolvedUa.kt          <span class="cm">Persists host → Chrome UA for resolved hosts.</span>
+├── CloudflareChallengeException.kt
+├── FlareSolverr.kt          <span class="cm">Optional auto-solver client.</span>
+├── JavaScriptEngine.kt      <span class="cm">GraalJS (QuickJs/Duktape stand-ins).</span>
+└── interceptor/             <span class="cm">Cloudflare, JSON-fix, UA, rate-limit, gzip, uncaught.</span></div>
+
+    <h3>source-api/ — the extension contract</h3>
+    <div class="filetree">source-api/.../
+├── source/      <span class="cm">MangaSource, CatalogueSource, SourceFactory, HttpSource, models.</span>
+├── animesource/ <span class="cm">AnimeSource, AnimeHttpSource, models (SAnime, SEpisode, Video…).</span>
+└── util/        <span class="cm">JsoupExtensions, JsonExtensions, RxExtension.</span></div>
+
+    <h3>android-compat/ — the Android shim</h3>
+    <div class="filetree">android-compat/src/main/kotlin/
+├── android/app/Application.kt       <span class="cm">Application : ContextWrapper : Context.</span>
+├── android/content/ · os/ · webkit/ · view/ · widget/ · graphics/ · util/
+├── androidx/preference/Preference.kt <span class="cm">Real preference tree.</span>
+├── app/cash/quickjs/QuickJs.kt       <span class="cm">GraalJS-backed.</span>
+└── com/squareup/duktape/Duktape.kt   <span class="cm">GraalJS-backed.</span></div>
+
+    <h3>The Web UI</h3>
+    <div class="filetree">server/src/main/resources/webui/
+├── index.html   <span class="cm">Single page shell: header, sidebar, modals.</span>
+├── style.css    <span class="cm">Crunchyroll-style dark theme.</span>
+├── app.js       <span class="cm">The whole SPA: views, API calls, i18n, players.</span>
+├── lang/en.json · es.json   <span class="cm">Translations (add a file to add a language).</span>
+└── docs/        <span class="cm">This documentation + assets.</span></div>
+
+    <h2 id="api">REST API</h2>
+    <p>Base URL: <code>http://&lt;host&gt;:4567/api/v1</code> — JSON in, JSON out.</p>
+    <table>
+      <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+      <tr><td>GET</td><td><code>/health</code></td><td>Liveness + source counts.</td></tr>
+      <tr><td>GET</td><td><code>/sources</code></td><td>All installed manga &amp; anime sources.</td></tr>
+      <tr><td>GET</td><td><code>/manga/{id}/popular|latest|search?query=&amp;page=</code></td><td>Manga catalog.</td></tr>
+      <tr><td>GET</td><td><code>/manga/{id}/details|chapters|pages?url=</code></td><td>Manga data.</td></tr>
+      <tr><td>GET</td><td><code>/anime/{id}/popular|latest|search</code></td><td>Anime catalog.</td></tr>
+      <tr><td>GET</td><td><code>/anime/{id}/details|episodes|seasons|hosters|videos|hosterVideos</code></td><td>Anime data + streams.</td></tr>
+      <tr><td>GET</td><td><code>/proxy|/hls|/dash|/dashseg</code></td><td>Media proxy (images are cached on disk).</td></tr>
+      <tr><td>GET/POST</td><td><code>/sources/{id}/prefs</code></td><td>Source preferences.</td></tr>
+      <tr><td>GET/POST/DELETE</td><td><code>/favorites…</code></td><td>Favorites + progress.</td></tr>
+      <tr><td>GET/POST</td><td><code>/extensions/repo|install|uninstall</code></td><td>Extension manager.</td></tr>
+      <tr><td>GET/POST</td><td><code>/cf/…</code></td><td>Manual Cloudflare resolution.</td></tr>
+    </table>
+    <pre><span class="c"># Health</span>
+curl http://localhost:4567/api/v1/health
+<span class="c"># → {"status":"ok","service":"miwayomi","mangaSources":7,"animeSources":13}</span>
+
+<span class="c"># Popular manga from a source, page 1</span>
+curl "http://localhost:4567/api/v1/manga/8448310129093543312/popular?page=1"
+
+<span class="c"># Chapters of a manga (url = the source's own URL, percent-encoded)</span>
+curl "http://localhost:4567/api/v1/manga/8448310129093543312/chapters?url=%2Fmanga%2F1"</pre>
+    <div class="note">Source IDs are 64-bit values and are returned as <b>strings</b>. Keep them as strings in clients — JS numbers lose precision above 2^53.</div>
+
+    <h2 id="webui">The Web UI</h2>
+    <p>The web UI is a single-page app with a Crunchyroll-style structure: top navigation, a filterable source sidebar, a home with hero and rows, a detail page with hero and numbered episode/chapter cards, a continuous manga reader, and a video player with an episode list.</p>
+
+    <img class="shot" src="assets/shot-1.png" alt="miwayomi home">
+    <div class="shot-row">
+      <figure><img src="assets/shot-2.png" alt="miwayomi screenshot"><figcaption>Source catalog</figcaption></figure>
+      <figure><img src="assets/shot-3.png" alt="miwayomi screenshot"><figcaption>Catalog row</figcaption></figure>
+      <figure><img src="assets/shot-4.png" alt="miwayomi screenshot"><figcaption>Series detail</figcaption></figure>
+      <figure><img src="assets/shot-5.png" alt="miwayomi screenshot"><figcaption>Detail with chapters</figcaption></figure>
+      <figure><img src="assets/shot-6.png" alt="miwayomi screenshot"><figcaption>Chapters</figcaption></figure>
+      <figure><img src="assets/shot-7.png" alt="miwayomi screenshot"><figcaption>Reader / player</figcaption></figure>
+    </div>
+    <div class="note">These screenshots are for illustration purposes only. All cover art, titles, extension names, and related content belong to their respective owners.</div>
+
+    <h3>Highlights</h3>
+    <div class="grid2">
+      <div class="card2"><h4>🔍 Filterable sidebar</h4><p>Filter sources by name and toggle All / Manga / Anime.</p></div>
+      <div class="card2"><h4>🏠 Home with hero</h4><p>Hero banner plus horizontal rows of source cards.</p></div>
+      <div class="card2"><h4>🖼️ Chapter thumbnails</h4><p>Each chapter shows its first page, lazy-loaded and cached.</p></div>
+      <div class="card2"><h4>▶ Player with episodes</h4><p>Video player with a side episode list and quality selector.</p></div>
+      <div class="card2"><h4>📖 Continuous reader</h4><p>Manga pages flow with no gaps — ideal for manhwa.</p></div>
+      <div class="card2"><h4>🌐 i18n</h4><p>English &amp; Spanish; add a <code>lang/&lt;code&gt;.json</code> for more.</p></div>
+    </div>
+
+    <h2 id="customizing">Customizing the UI</h2>
+    <p>Everything about the interface lives in <code>server/src/main/resources/webui/</code>. You never touch the backend to change the look — edit these files and rebuild:</p>
+    <table>
+      <tr><th>File</th><th>What it controls</th></tr>
+      <tr><td><code>index.html</code></td><td>The page shell: header, navigation, sidebar, modals, script tags.</td></tr>
+      <tr><td><code>style.css</code></td><td>Everything visual. All colors are CSS variables at the top (<code>:root</code>).</td></tr>
+      <tr><td><code>app.js</code></td><td>Behavior: views, rendering, API calls, i18n, players.</td></tr>
+      <tr><td><code>lang/*.json</code></td><td>User-visible strings, one file per language.</td></tr>
+    </table>
+
+    <h3>Change the theme (colors)</h3>
+    <p>Open <code>style.css</code> and edit the variables at the top. For example, to go from the orange accent to a violet one:</p>
+    <pre><span class="c">/* style.css :root */</span>
+:root {
+  --accent: <span class="s">#7c3aed</span>;      <span class="c">/* was #f47521 */</span>
+  --accent-hi: <span class="s">#a78bfa</span>;   <span class="c">/* was #ff8c3b */</span>
+}</pre>
+    <p>The background, panels, borders, text, and buttons all reference variables, so one change propagates everywhere.</p>
+
+    <h3>Add a language</h3>
+    <pre><span class="c"># 1. Copy the English file</span>
+cp lang/en.json lang/fr.json
+<span class="c"># 2. Translate the values (keep the keys), then register it:</span>
+<span class="c">#    in index.html: &lt;option value="fr"&gt;Français&lt;/option&gt;</span>
+<span class="c">#    in app.js:     AVAILABLE_LANGS = ["en","es","fr"]</span></pre>
+
+    <h3>Add a new view or section</h3>
+    <ol>
+      <li>Write a render function in <code>app.js</code> that fills <code>#content</code> (look at <code>renderHome</code> or <code>renderDetail</code> as templates).</li>
+      <li>Add a button/nav item in <code>index.html</code> that calls it.</li>
+      <li>Style the new elements in <code>style.css</code> reusing the variables.</li>
+      <li>Any user-visible text goes through <code>t("key")</code> and is added to <code>lang/en.json</code> and <code>lang/es.json</code>.</li>
+    </ol>
+
+    <h3>Apply your changes</h3>
+    <pre>cd /home/asking/Escritorio/miwayomi
+./gradlew :server:installDist   <span class="c"># repackages the WebUI into the distribution</span>
+./start.sh                       <span class="c"># restart</span></pre>
+    <div class="note">After changing <code>app.js</code>, always validate first: <code>node --check server/src/main/resources/webui/app.js</code>. If the port is busy after a rebuild, kill the old process: <code>pkill -9 -f "server/build/install/server/lib"</code>.</div>
+
+    <h2 id="build">Building and running</h2>
+    <h3>Requirements</h3>
+    <ul>
+      <li>JDK 21 (Temurin recommended). Gradle downloads itself via the wrapper.</li>
+      <li>Chrome/Chromium only if you want to solve Cloudflare challenges manually.</li>
+    </ul>
+    <h3>Lightweight build (recommended for a VPS)</h3>
+    <pre>./gradlew :server:installDist
+./gradlew --stop                <span class="c"># frees the Gradle daemons (RAM)</span>
+./start.sh                      <span class="c"># uses the distribution if present</span></pre>
+    <p>The JVM runs with <code>-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC</code>. Override RAM with <code>MIWAYOMI_MEM="-Xmx768m" ./start.sh</code>.</p>
+    <h3>Dev mode</h3>
+    <pre>./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://127.0.0.1:8191"</pre>
+    <h3>CLI options</h3>
+    <table>
+      <tr><th>Flag</th><th>Default</th><th>Meaning</th></tr>
+      <tr><td><code>--port</code>, <code>-p</code></td><td>4567</td><td>Listen port.</td></tr>
+      <tr><td><code>--host</code>, <code>-h</code></td><td>0.0.0.0</td><td>Listen address.</td></tr>
+      <tr><td><code>--data</code>, <code>-d</code></td><td>./data</td><td>Data directory (extensions, prefs, cache).</td></tr>
+      <tr><td><code>--flaresolverr</code>, <code>-f</code></td><td>—</td><td>FlareSolverr URL (optional auto-solve).</td></tr>
+      <tr><td><code>--chrome</code></td><td>auto</td><td>Explicit Chrome path for the manual modal.</td></tr>
+    </table>
+    <h3>Verify</h3>
+    <pre>curl http://localhost:4567/api/v1/health</pre>
+    <p>Then open <code>http://localhost:4567</code>.</p>
+
+    <h2 id="extension">Creating your own extension</h2>
+    <div class="note"><b>Legally safe, by design.</b> miwayomi does not tell you to download or redistribute anyone’s extensions. This section teaches you how to write your <b>own</b> compatible source and load it. Respect the terms of service of the sites you write sources for, and never use this to infringe copyright.</div>
+    <h3>Option A — a built-in source (fastest)</h3>
+    <p>Every source is an object implementing the <code>MangaSource</code> contract. Write a Kotlin class in <code>server/src/main/kotlin/miwayomi/builtin/</code> — exactly like <code>DemoSource.kt</code> — rebuild, and it appears in <code>/sources</code>.</p>
+    <h3>Option B — a real extension APK</h3>
+    <p>Three things: a manifest, a source class, and a build that produces an APK.</p>
+    <h4>1. The manifest</h4>
+    <pre><span class="k">&lt;manifest</span> xmlns:android=<span class="s">"http://schemas.android.com/apk/res/android"</span><span class="k">&gt;</span>
+    <span class="k">&lt;application&gt;</span>
+        <span class="k">&lt;meta-data</span>
+            android:name=<span class="s">"tachiyomi.extension.class"</span>
+            android:value=<span class="s">"com.example.demolib.DemoLibFactory"</span> <span class="k">/&gt;</span>
+    <span class="k">&lt;/application&gt;</span>
+<span class="k">&lt;/manifest&gt;</span></pre>
+    <p>The class must be a <code>SourceFactory</code> (<code>createSources(): List&lt;MangaSource&gt;</code>) or a direct <code>MangaSource</code> subclass.</p>
+    <h4>2. The source (original example)</h4>
+    <pre><span class="k">package</span> com.example.demolib
+
+<span class="k">import</span> eu.kanade.tachiyomi.source.online.HttpSource
+<span class="k">import</span> eu.kanade.tachiyomi.source.model.*
+
+<span class="k">class</span> <span class="s">DemoLib</span> : HttpSource() {
+    override <span class="k">val</span> name = <span class="s">"DemoLib"</span>
+    override <span class="k">val</span> lang = <span class="s">"en"</span>
+    override <span class="k">val</span> baseUrl = <span class="s">"https://demo-manga.example"</span>
+    override <span class="k">val</span> supportsLatest = true
+
+    override fun getFilterList() = FilterList()
+
+    override fun popularMangaRequest(page: Int) = GET(<span class="s">"$baseUrl/popular?page=$page"</span>, headers)
+    override fun popularMangaParse(response: Response) =
+        response.use { parseMangaPage(it) }
+    <span class="c">// ... search, latest, details, chapters, pages ...</span>
+}
+
+<span class="k">class</span> <span class="s">DemoLibFactory</span> : SourceFactory {
+    override fun createSources() = listOf(DemoLib())
+}</pre>
+    <h4>3. Build &amp; install</h4>
+    <ul>
+      <li>Compile against the <code>source-api</code> module in this repository.</li>
+      <li>Produce an APK, then drop it into <code>&lt;data&gt;/extensions/</code> and restart — or use <code>POST /api/v1/extensions/install</code>.</li>
+      <li>Confirm with <code>curl http://localhost:4567/api/v1/sources</code>.</li>
+    </ul>
+
+    <h2 id="streaming">Streaming internals</h2>
+    <ul>
+      <li><b>HLS</b> (<code>.m3u8</code>) — <code>/hls</code> rewrites the manifest (including <code>URI=</code> inside <code>EXT-X-KEY</code>/<code>EXT-X-MAP</code>) and proxies segments with Range support.</li>
+      <li><b>DASH</b> (<code>.mpd</code>) — <code>/dash</code> rewrites <code>media=</code>/<code>initialization=</code>; <code>/dashseg</code> resolves base + relative path, keeping <code>$Number%05d$</code> templates raw.</li>
+      <li><b>Direct files</b> — <code>/proxy</code> streams with Range support.</li>
+    </ul>
+    <p>All proxies stream in 64 KB chunks (no full-file buffering). <code>MimeTypes.kt</code> infers the correct content type even when the CDN sends <code>application/octet-stream</code>. <b>Images are cached to disk</b> (<code>data/cache/images/</code>) so thumbnails, covers, and manga pages load instantly on repeat visits; video is deliberately not cached so Range/206 stays correct.</p>
+
+    <h2 id="cloudflare">Cloudflare challenges</h2>
+    <p>Some sources sit behind Cloudflare’s anti-bot. miwayomi gives you two ways to unlock them:</p>
+    <ol>
+      <li><b>Manual (always available):</b> the web UI opens a modal with a live headless Chrome (CDP). You solve the challenge by hand, miwayomi captures the cookies (including HttpOnly <code>cf_clearance</code>) and remembers the Chrome UA for that host. Subsequent requests fly through (~1 s).</li>
+      <li><b>FlareSolverr (optional):</b> tries to solve automatically; if it fails or is absent, the manual modal appears.</li>
+    </ol>
+
+    <h2 id="persistence">Local persistence</h2>
+    <p>Everything is stored in <code>data/cache/miwayomi.db</code> (SQLite, WAL mode):</p>
+    <table>
+      <tr><th>Store</th><th>What it holds</th></tr>
+      <tr><td><code>kv_store</code></td><td>Key-value settings (including resolved hosts <code>cf_ua_*</code>).</td></tr>
+      <tr><td><code>cookies</code></td><td>Cloudflare and site cookies, persisted across restarts.</td></tr>
+      <tr><td><code>favorites</code></td><td>Favorites + last-read chapter per entry.</td></tr>
+    </table>
+    <p>Source preferences live in <code>data/prefs/source_&lt;id&gt;.properties</code>, and the proxied-image cache in <code>data/cache/images/</code>.</p>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <table>
+      <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
+      <tr><td><code>Stub!</code> on an <code>android.*</code> method</td><td>Only a stub in <code>android.jar</code>; implement it in <code>android-compat</code> and regenerate the jar.</td></tr>
+      <tr><td><code>VerifyError: ... not assignable to ContextWrapper</code></td><td>The <code>Context</code> hierarchy is wrong; keep <code>Application : ContextWrapper : Context</code>.</td></tr>
+      <tr><td>Port already in use after rebuild</td><td>Old process alive: <code>pkill -9 -f "server/build/install/server/lib"</code>.</td></tr>
+      <tr><td>One package shows as dozens of sources</td><td>A single APK can declare many mirrors; the UI groups them by package.</td></tr>
+      <tr><td>Source preferences don’t appear</td><td><code>PreferenceScreen</code> must alias <code>androidx.preference.PreferenceScreen</code> (it does in <code>source-api</code>).</td></tr>
+      <tr><td>Incremental build seems stale</td><td>Use <code>./gradlew :server:clean :server:installDist</code>.</td></tr>
+    </table>
+
+    <h2 id="roadmap">Roadmap</h2>
+    <ul>
+      <li>More web UI views — filters, in-place sorting, page caching.</li>
+      <li>Per-source JS engines — isolate QuickJs/Duktape per extension.</li>
+      <li>Torrent streaming — the stub exists in <code>core-common</code>.</li>
+      <li>Your own sources — follow the guide above; a source you wrote is the best contribution to your own server.</li>
+    </ul>
+    <p>Good first places to read the code: <code>builtin/DemoSource.kt</code>, <code>extension/JarFixer.kt</code>, and <code>api/StreamingRoutes.kt</code>.</p>
+
+    <h2 id="glossary">Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning</th></tr>
+      <tr><td>Extension</td><td>An APK in the Tachiyomi/Aniyomi format that declares one or more sources.</td></tr>
+      <tr><td>Source</td><td>A catalog provider (manga or anime) implementing the source API.</td></tr>
+      <tr><td>Factory</td><td><code>SourceFactory</code>/<code>AnimeSourceFactory</code>; how one APK provides several sources.</td></tr>
+      <tr><td>Shim</td><td>The <code>android-compat</code> layer that makes extensions believe Android exists.</td></tr>
+      <tr><td>JarFixer</td><td>The ASM pass that repairs bytecode the JVM would otherwise reject.</td></tr>
+      <tr><td>HLS / DASH</td><td>Adaptive streaming formats (<code>.m3u8</code> / <code>.mpd</code>) transparently proxied.</td></tr>
+      <tr><td>CDP</td><td>Chrome DevTools Protocol, used for the manual Cloudflare modal.</td></tr>
+      <tr><td>SQLite store</td><td>Local persistence for cookies, favorites, and settings.</td></tr>
+    </table>
+
+    <h2 id="legal">Legal notice &amp; disclaimer</h2>
+    <p>miwayomi is an <b>execution engine</b>, not a content service.</p>
+    <ul>
+      <li><b>No content, no distribution.</b> miwayomi does not create, host, store, index, link to, distribute, or recommend any content, media, source, or extension repository. It ships no content itself; the built-in demo source is fully offline.</li>
+      <li><b>Third-party extensions.</b> Extensions in the Tachiyomi/Aniyomi format are third-party software written and distributed by their own authors. miwayomi merely loads and runs them at the user's request. Their behavior and the sites they interact with are the sole responsibility of their authors and of the user who installs them.</li>
+      <li><b>User responsibility.</b> You are solely responsible for the extensions you install and the content you access; for complying with the laws of your jurisdiction and the terms of service of any site you interact with; and for not using this software to infringe copyright, bypass access controls you are not authorized to bypass, or redistribute content you do not have rights to.</li>
+      <li><b>No affiliation.</b> miwayomi is not affiliated with, endorsed by, sponsored by, or a fork of Tachiyomi, Aniyomi, or any related project. Its design is inspired by the Tachiyomi/Aniyomi open-source ecosystem, and portions of their source APIs are reused under Apache-2.0 — see <code>NOTICE-ANIYOMI.md</code> for attribution.</li>
+      <li><b>Trademarks and content.</b> All product names, logos, brands, cover art, titles, and other marks that appear in this project or its screenshots belong to their respective owners and are used only for identification or illustration purposes.</li>
+      <li><b>No warranty.</b> This software is provided “as is”, without warranty of any kind, express or implied. The author(s) are not liable for any damages arising from its use.</li>
+      <li>If you use this software, you do so <b>at your own risk and under your own responsibility</b>.</li>
+    </ul>
+
+  </main>
+</div>
+
+<div id="lightbox" class="lightbox" onclick="lbClose()">
+  <span class="lb-close" onclick="lbClose()">&times;</span>
+  <img id="lbImg" alt="">
+  <div class="lb-cap" id="lbCap"></div>
+</div>
+
+<script>
+  (function () {
+    var lb = document.getElementById('lightbox');
+    var lbImg = document.getElementById('lbImg');
+    var lbCap = document.getElementById('lbCap');
+    function open(img) {
+      lbImg.src = img.currentSrc || img.src;
+      var fig = img.closest('figure');
+      var cap = fig && fig.querySelector('figcaption');
+      lbCap.textContent = cap ? cap.textContent : '';
+      lb.classList.add('open');
+    }
+    document.querySelectorAll('.shot, .shot-row img').forEach(function (img) {
+      img.style.cursor = 'zoom-in';
+      img.addEventListener('click', function (e) { e.stopPropagation(); open(img); });
+    });
+    function close() { lb.classList.remove('open'); }
+    window.lbClose = close;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  })();
+</script>
+
+</body>
+</html>

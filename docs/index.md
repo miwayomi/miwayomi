@@ -1,0 +1,849 @@
+# miwayomi
+
+> **mi·wa·yo·mi** — *"beautiful reading"* · a self-contained server that runs
+> **Aniyomi/Tachiyomi-format catalog extensions** on the JVM, with **no Android device, no emulator, no cloud**.
+
+miwayomi is an **execution engine**, not a content service. It loads third-party
+extensions in the Tachiyomi/Aniyomi format and exposes their sources through a
+clean REST API and a web UI. **It does not distribute, host, index, or endorse
+any content, source, or repository.** Extensions are third-party software and
+answer for themselves; miwayomi simply runs them and serves their catalog.
+
+---
+
+## Table of contents
+
+1. [The story behind the name](#the-story-behind-the-name)
+2. [What miwayomi is (and is not)](#what-miwayomi-is-and-is-not)
+3. [Design philosophy](#design-philosophy)
+4. [How it works](#how-it-works)
+5. [Architecture overview](#architecture-overview)
+6. [Anatomy of the codebase](#anatomy-of-the-codebase)
+7. [REST API](#rest-api)
+8. [The web UI](#the-web-ui)
+9. [Building and running](#building-and-running)
+10. [Creating your own extension](#creating-your-own-extension)
+11. [Streaming internals](#streaming-internals)
+12. [Cloudflare challenges](#cloudflare-challenges)
+13. [Local persistence](#local-persistence)
+14. [Troubleshooting](#troubleshooting)
+15. [Roadmap and contributing](#roadmap-and-contributing)
+16. [Legal notice](#legal-notice)
+17. [Glossary](#glossary)
+
+---
+
+## The story behind the name
+
+Every project deserves a story, and miwayomi got a good one by accident.
+
+It started the way most self-hosted projects start: with a problem and a grudge.
+The original plan was modest — **a self-hosted anime player**. I wanted my own
+little corner of the internet where I could watch anime through a personal,
+controllable server, and I initially tried to build it on top of
+[Suwayomi]. That journey was... educational. The project kept **hanging and
+crashing** on me, eating RAM like it was going out of style, and fighting me at
+every turn. After too many nights of fighting a server that froze mid-episode,
+I made the call that so many builders eventually make: **"fine, I'll build my
+own."**
+
+So I walked away from Suwayomi and started over from a different angle. Instead
+of bolting a player onto an existing stack, I built a lean execution engine
+from the ground up, modeled on the ideas of **Aniyomi** (itself born from
+**Tachiyomi**) — the same extension format, the same familiar source API, but
+reimagined as a **pure JVM service** that needs no Android at all.
+
+The name came later, and honestly, it came from a manga. I was reading a series
+and a character named **Miwa** caught my eye — it just *sounded* right. I
+latched onto it and turned it into **miwayomi** without having the faintest idea
+what it meant. Pure vibe. No research, no dictionary, no regrets. When I
+finally looked it up, it turned out to mean roughly **"beautiful reading"** — a
+portmanteau of *mi* ("beautiful") and *yomi* ("reading"). A happy accident, and
+honestly the best kind: the name picked me before I picked it.
+
+And that's the whole vibe of this project: **beautiful reading, served from a
+box on your own desk.** No emulator, no Android device, no "one more
+dependency to babysit." Just a server, an API, and the pages you love — on your
+terms.
+
+[Suwayomi]: https://github.com/Suwayomi
+
+---
+
+## What miwayomi is (and is not)
+
+| miwayomi **is**                                                    | miwayomi **is not**                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------ |
+| An execution engine for Tachiyomi/Aniyomi-format extensions         | A content host or "piracy box"                         |
+| A JVM server (Ktor) that runs extensions without Android            | An emulator or a phone-in-the-cloud                    |
+| A REST API + web UI over your installed sources                     | A fork, rebrand, or replacement of any client          |
+| A teaching tool: learn to write your own compatible sources         | A distributor of extensions or copyrighted media       |
+
+The core rule, repeated throughout this document:
+
+> **Extensions are third-party software.** miwayomi runs them and exposes their
+> catalogs. Whatever a source does, it does on its own behalf. You are
+> responsible for the extensions you install and the content you access.
+
+---
+
+## Design philosophy
+
+miwayomi was built around a handful of principles that shaped every file:
+
+1. **No Android required.** The whole `android-compat` module exists to make
+   extensions believe there is an Android runtime. In reality there is none —
+   just a carefully crafted shim on a plain JVM.
+2. **Lightweight by default.** The server runs in a single `java` process with a
+   small heap and a serial GC. Measured footprint: **~160–170 MB RSS at rest** —
+   comfortable on a 4 GB VPS.
+3. **Generic, not special-cased.** The extension pipeline is format-driven:
+   if an APK declares a source, miwayomi can load it — regardless of who wrote
+   it or what it indexes.
+4. **Chunked, memory-neutral streaming.** Large media is streamed in 64 KB
+   chunks; nothing is ever buffered whole into RAM.
+5. **Persistence that survives restarts.** Cookies, resolved Cloudflare hosts,
+   favorites, and reading progress live in SQLite.
+6. **Respect for the sites.** The proxy forwards the exact headers each source
+   needs. If a site is behind Cloudflare, you resolve the challenge manually —
+   your browser, your decision.
+
+---
+
+## How it works
+
+Tachiyomi/Aniyomi extensions are **APK files** that announce their catalog
+classes in the manifest under `meta-data` (`tachiyomi.extension.class` /
+`tachiyomi.animeextension.class`). miwayomi turns those APKs into runnable
+sources on the JVM:
+
+```mermaid
+flowchart LR
+    A[APK extension] --> B[apk-parser reads manifest]
+    B --> C[dex2jar: classes.dex → .jar]
+    C --> D[JarFixer: bytecode repairs]
+    D --> E[ChildFirstURLClassLoader]
+    E --> F[SourceFactory / Source instantiated]
+    F --> G[(Manga/Anime SourceManager)]
+    G --> H[REST API + WebUI]
+```
+
+1. **Manifest** — `apk-parser` reads `AndroidManifest.xml` and extracts the
+   declared catalog class(es).
+2. **DEX → JAR** — `dex2jar` converts `classes.dex` into a `.jar`.
+3. **Bytecode repair** — `JarFixer` fixes what Android's dex optimizer left
+   behind for plain-JVM consumption: stackmap frames, constructors that call a
+   non-super ancestor's `<init>`, and "phantom" classes that Android would
+   accept but the JVM rejects.
+4. **Class loading** — a *child-first* `ClassLoader` loads the classes so the
+   extension can use its own bundled copies of libraries.
+5. **Instantiation** — the class is either a `SourceFactory`
+   (`createSources(): List<MangaSource>`) or a direct `Source` subclass.
+   miwayomi instantiates and registers every produced source.
+6. **Exposure** — the manga/anime managers back every catalog endpoint.
+
+Because the mechanism is generic, it works for **any** extension in that
+format — the format is the contract, not the vendor.
+
+---
+
+## Architecture overview
+
+```mermaid
+flowchart TB
+    subgraph UI["server/ (Ktor app)"]
+        API["REST API (api/)"]
+        WEB["WebUI (resources/webui/)"]
+        EXT["Extension pipeline (extension/)"]
+        CF["Cloudflare helper (cf/)"]
+        BIN["Built-in sources (builtin/)"]
+    end
+    subgraph CORE["core-common/ (ported network core)"]
+        NH["NetworkHelper + OkHttp"]
+        INTC["Interceptors (Cloudflare, JSON fix, UA...)"]
+        SQL["SqliteStore + JvmCookieJar"]
+        FS["FlareSolverr client"]
+    end
+    subgraph SRC["source-api/ (Aniyomi API → JVM)"]
+        MS["MangaSource / HttpSource"]
+        AS["AnimeSource / AnimeHttpSource"]
+        MD["Models: SManga, SChapter, SAnime, SEpisode..."]
+    end
+    subgraph COMPAT["android-compat/ (Android shim)"]
+        AND["android.* / androidx.* stubs"]
+        PREFS["androidx.preference tree"]
+    end
+    EXT --> COMPAT
+    API --> SRC
+    CORE --> SRC
+    EXT --> CORE
+    WEB --> API
+    BIN --> SRC
+```
+
+| Module | Role |
+| ------ | ---- |
+| `android-compat/` | Minimal Android shim: the `android.*`/`androidx.*` classes extensions reference, plus the `android.jar` stub used at build time. |
+| `core-common/` | The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine. |
+| `source-api/` | The Aniyomi source API compiled for the JVM: source interfaces and models that extensions implement. |
+| `server/` | The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI. |
+| `data/` | Runtime data: `data/extensions/*.apk` (+ converted `.jar`), source preferences, SQLite cache. |
+
+---
+
+## Anatomy of the codebase
+
+A file-by-file tour of the important pieces. This is the map you want when
+you're about to change something.
+
+### `server/` — the application
+
+```
+server/src/main/kotlin/miwayomi/
+├── Main.kt                 Entry point: parses args, wires DI, starts Ktor.
+├── Config.kt               ServerConfig + CLI parsing (--port, --data, --flaresolverr, --chrome...).
+├── di/
+│   ├── AppModule.kt        Injekt module: registers managers, NetworkHelper, ExtensionManager...
+│   └── ConfigHolder.kt     Holds the parsed config for DI (set before Injekt loads).
+├── source/
+│   └── SourceManagers.kt   MangaSourceManager + AnimeSourceManager: thread-safe
+│                           registries (ConcurrentHashMap) for every loaded source.
+├── extension/
+│   ├── ExtensionManager.kt Loads/unloads APKs, instantiates factories/sources,
+│   │                       tracks which package owns each source, exposes uninstall.
+│   ├── ExtensionMeta.kt    Parsed metadata of a loaded extension.
+│   ├── PackageTools.kt     apk-parser (manifest XML), dex2jar, class-name resolution.
+│   ├── JarFixer.kt         ASM bytecode repair so converted jars run on the JVM.
+│   └── ChildFirstURLClassLoader.kt  ClassLoader that prefers the extension's own
+│                                   bundled classes over the parent's.
+├── builtin/
+│   ├── DemoSource.kt       An offline demo manga source (returns empty catalogs,
+│   │                       no network) — a compact reference for the API shape.
+│   └── MockCfSource.kt     A test source that simulates a Cloudflare challenge.
+├── cf/
+│   ├── CfBrowser.kt        Controls the bundled headless Chrome for manual resolution.
+│   └── CdpClient.kt        Chrome DevTools Protocol client (WebSocket + JSON-RPC).
+└── api/
+    ├── ApiRoutes.kt        Thin root: plugins (JSON, status pages), static WebUI,
+    │                       /health, /sources, and registers all sub-routers.
+    ├── MangaRoutes.kt      Manga endpoints (popular/latest/search/details/chapters/pages).
+    ├── AnimeRoutes.kt      Anime endpoints (popular/latest/search/details/episodes/seasons/
+    │                       hosters/videos/hosterVideos).
+    ├── StreamingRoutes.kt  /proxy, /hls, /dash, /dashseg — chunked media proxy.
+    ├── StreamProxy.kt      Rewrites HLS and DASH manifests, resolves segments.
+    ├── ProxyHelpers.kt     Header parsing, per-source OkHttp clients, URL normalization.
+    ├── MimeTypes.kt        Infers correct MIME from extension when the CDN lies.
+    ├── ExtensionRoutes.kt  Repository index (JSON + protobuf), install/uninstall.
+    ├── SourcePrefsRoutes.kt  GET/POST source preferences.
+    ├── FavoritesRoutes.kt  Favorites + last-read progress.
+    ├── CfRoutes.kt         Manual Cloudflare modal endpoints (start/shot/click/key/finish).
+    ├── ApiHelpers.kt       Shared helpers (source lookup, required params, 404s).
+    ├── Dtos.kt             All @Serializable response models.
+    ├── Mappers.kt          Converters from source models to DTOs.
+    └── KeiIndexProto.kt    Protobuf (index.pb, gzip) repository-index parser.
+```
+
+### `core-common/` — the network heart
+
+```
+core-common/src/main/kotlin/eu/kanade/tachiyomi/network/
+├── NetworkHelper.kt        Builds the shared OkHttpClient; owns the SQLite store.
+├── JvmCookieJar.kt         Persistent cookie jar backed by SQLite (survives restarts).
+├── SqliteStore.kt          SQLite access: kv_store, cookies, and favorites tables.
+├── CookieCodec.kt          Cookie ↔ stored-row (de)serialization.
+├── CfResolvedUa.kt         Persists "host → Chrome UA" for resolved Cloudflare hosts.
+├── CloudflareChallengeException.kt  Signal thrown when a challenge is detected.
+├── FlareSolverr.kt         Optional auto-solver client (FlareSolverr /v1).
+├── JavaScriptEngine.kt     GraalJS-backed JS engine (QuickJs/Duktape stand-ins).
+├── Requests.kt             GET/POST helpers used by sources.
+├── OkHttpExtensions.kt     Response/call helpers (await, cache-less calls...).
+├── ProgressListener.kt, ProgressResponseBody.kt   Download progress plumbing.
+├── HttpException.kt        Typed HTTP errors.
+├── Favorite.kt             Favorites/tracking model.
+├── NetworkPreferences.kt   Preference wiring for the network stack.
+└── interceptor/
+    ├── CloudflareInterceptor.kt      Detects 403/429/503 challenges, tries FlareSolverr,
+    │                                 or throws CloudflareChallengeException (→ manual modal).
+    ├── FixDoubleEncodedJsonInterceptor.kt  Repairs double-encoded JSON request bodies.
+    ├── UserAgentInterceptor.kt       Injects the configured User-Agent.
+    ├── RateLimitInterceptor.kt, SpecificHostRateLimitInterceptor.kt  Polite throttling.
+    ├── IgnoreGzipInterceptor.kt      Prevents double-decompression bugs.
+    └── UncaughtExceptionInterceptor.kt  Converts stray failures into typed errors.
+```
+
+Also in `core-common`: `logcat/` (logging), `tachiyomi/core/common/preference/`
+(in-memory preference store), `tachiyomi/core/common/util/` (coroutines, image,
+sort helpers), and `aniyomi/core/common/torrent/` (the torrent server is
+**disabled** — a stub kept for API compatibility).
+
+### `source-api/` — the extension contract
+
+```
+source-api/src/main/kotlin/eu/kanade/tachiyomi/
+├── source/
+│   ├── MangaSource.kt       The manga source contract.
+│   ├── CatalogueSource.kt   Catalog contract (popular/latest/search).
+│   ├── ConfigurableSource.kt  Preference screen support.
+│   ├── SourceFactory.kt     createSources(): List<MangaSource> — how multi-source APKs work.
+│   ├── UnmeteredSource.kt   Opt-in for data-usage exemptions.
+│   ├── online/
+│   │   ├── HttpSource.kt        The concrete base for HTTP manga sources.
+│   │   ├── ParsedHttpSource.kt  Template with Jsoup parsing hooks.
+│   │   └── ResolvableSource.kt  Image resolution hook.
+│   ├── model/               SManga, SChapter, Page, Filter, FilterList, MangasPage.
+│   └── PreferenceScreen.kt  typealias → androidx.preference.PreferenceScreen.
+├── animesource/
+│   ├── AnimeSource.kt       The anime source contract.
+│   ├── AnimeSourceFactory.kt  createAnimeSources().
+│   ├── ConfigurableAnimeSource.kt
+│   ├── online/AnimeHttpSource.kt, ParsedAnimeHttpSource.kt
+│   ├── model/               SAnime, SEpisode, Video, Hoster, FetchType, SAnimeImpl...
+│   └── PreferenceScreen.kt  typealias → androidx.preference.PreferenceScreen.
+└── util/                    JsoupExtensions, JsonExtensions, RxExtension, VideoInfo.
+```
+
+> **Why `typealias` matters:** extensions import
+> `androidx.preference.PreferenceScreen`. If miwayomi's own
+> `eu.kanade.tachiyomi.source.PreferenceScreen` were a distinct class, the
+> overrides would never match and extension preferences would break. Aliasing it
+> to the `androidx` type keeps the ecosystem's expectations intact.
+
+### `android-compat/` — the Android shim
+
+```
+android-compat/src/main/kotlin/
+├── android/app/Application.kt        Application : ContextWrapper : Context
+├── android/content/                  Context, ContextWrapper, ContextThemeWrapper, Intent,
+│                                     SharedPreferences (+ CompatSharedPreferences),
+│                                     PackageManager, Resources...
+├── android/os/                       Build, Bundle, Handler, Looper, Message, SystemClock
+├── android/webkit/                   WebView, WebViewClient, WebChromeClient, WebSettings,
+│                                     CookieManager, ValueCallback
+├── android/view/ & android/widget/   View, ViewGroup, AbsoluteLayout
+├── android/graphics/                 Bitmap, BitmapFactory, Rect, Drawable
+├── android/util/ & android/net/      Log, Base64, Html, DisplayMetrics, AttributeSet, Uri
+├── androidx/preference/Preference.kt Real preference tree (group, dialog, edit-text...)
+├── app/cash/quickjs/QuickJs.kt       GraalJS-backed stand-in for QuickJs
+├── com/squareup/duktape/Duktape.kt   GraalJS-backed stand-in for Duktape
+└── (build-time) android.jar stub     Regenerated by scripts/regenerate-android-jar.py
+```
+
+The shim has to be careful: classes that miwayomi implements **for real** are
+removed from the build-time `android.jar` (see the `OVERRIDDEN` list in
+`scripts/regenerate-android-jar.py`), so the JVM loads the working
+implementation instead of an empty stub that would throw `Stub!`.
+
+### `server/src/main/resources/webui/` — the interface
+
+```
+webui/
+├── index.html   Single page: sidebar, toolbar, reader, player, modals.
+├── app.js       The whole client: API calls, rendering, i18n (t()), players (hls.js/dash.js).
+├── style.css    Dark, responsive theme.
+└── lang/
+    ├── en.json  English strings (default).
+    ├── es.json  Spanish strings.
+    └── README.md How to add a language (copy en.json → <code>.json, translate, register).
+```
+
+---
+
+## REST API
+
+Base URL: `http://<host>:4567/api/v1` — JSON in, JSON out.
+
+### Endpoints
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `GET` | `/health` | Liveness + source counts. |
+| `GET` | `/sources` | All installed manga & anime sources (with owning package). |
+| `GET` | `/manga/{sourceId}/popular?page=` | Popular manga catalog. |
+| `GET` | `/manga/{sourceId}/latest?page=` | Latest manga updates. |
+| `GET` | `/manga/{sourceId}/search?query=&page=` | Search manga. |
+| `GET` | `/manga/{sourceId}/details?url=` | Manga details (url-encoded source URL). |
+| `GET` | `/manga/{sourceId}/chapters?url=` | Chapter list. |
+| `GET` | `/manga/{sourceId}/pages?url=` | Page image URLs. |
+| `GET` | `/anime/{sourceId}/popular?page=` | Popular anime catalog. |
+| `GET` | `/anime/{sourceId}/latest?page=` | Latest anime updates. |
+| `GET` | `/anime/{sourceId}/search?query=&page=` | Search anime. |
+| `GET` | `/anime/{sourceId}/details?url=` | Anime details. |
+| `GET` | `/anime/{sourceId}/episodes?url=` | Episode list. |
+| `GET` | `/anime/{sourceId}/seasons?url=` | Seasons. |
+| `GET` | `/anime/{sourceId}/hosters?url=` | Hosters. |
+| `GET` | `/anime/{sourceId}/videos?url=` | Extracted video streams. |
+| `GET` | `/anime/{sourceId}/hosterVideos?url=&hoster=` | Videos from a specific hoster. |
+| `GET` | `/proxy?url=&headers=` | Generic media/image proxy (supports Range). |
+| `GET` | `/hls?url=&headers=` | HLS manifest proxy (rewrites segment URIs). |
+| `GET` | `/dash?url=` | DASH manifest proxy (rewrites SegmentTemplate/SegmentList). |
+| `GET` | `/dashseg?base=&rel=` | DASH segment fetcher (resolves base + relative path). |
+| `GET` | `/sources/{sourceId}/prefs` | Read a source's declared preferences. |
+| `POST` | `/sources/{sourceId}/prefs` | Save preferences (`{key: value}`). |
+| `GET` | `/favorites` | List favorites. |
+| `GET` | `/favorites/check?sourceId=&url=` | Is this entry favorited? |
+| `POST` | `/favorites` | Add favorite (`{sourceId,url,title,thumbnailUrl,type}`). |
+| `DELETE` | `/favorites?sourceId=&url=` | Remove favorite. |
+| `POST` | `/favorites/progress` | Save last-read chapter progress. |
+| `GET` | `/extensions/repo?url=` | List an extension repository's index. |
+| `POST` | `/extensions/install` | Install `{repoUrl, apk}`. |
+| `POST` | `/extensions/uninstall` | Uninstall `{pkg}`. |
+| `GET` | `/cf/start?url=` | Open the headless browser for a manual challenge. |
+| `GET` | `/cf/shot` | Live screenshot of the challenge. |
+| `GET` | `/cf/url` | Current URL in the browser. |
+| `POST` | `/cf/click` | Forward a click `{x,y}`. |
+| `POST` | `/cf/key` | Forward a key press `{key}`. |
+| `POST` | `/cf/finish` | Capture cookies and close the browser. |
+
+### Examples
+
+```bash
+# Health
+curl http://localhost:4567/api/v1/health
+# {"status":"ok","service":"miwayomi","mangaSources":7,"animeSources":13}
+
+# All sources
+curl http://localhost:4567/api/v1/sources
+
+# Popular manga from source <id>, page 1
+curl "http://localhost:4567/api/v1/manga/7374498796507972405/popular?page=1"
+
+# Search within a source
+curl "http://localhost:4567/api/v1/manga/7374498796507972405/search?query=one+piece&page=1"
+
+# Details for a catalog entry (url is the source's own URL, percent-encoded)
+curl "http://localhost:4567/api/v1/manga/7374498796507972405/details?url=%2Fmanga%2F123"
+
+# Chapters for that manga
+curl "http://localhost:4567/api/v1/manga/7374498796507972405/chapters?url=%2Fmanga%2F123"
+
+# Page image URLs for a chapter
+curl "http://localhost:4567/api/v1/manga/7374498796507972405/pages?url=%2Fchapter%2F456"
+
+# Read a source's preferences
+curl "http://localhost:4567/api/v1/sources/7374498796507972405/prefs"
+
+# Save a preference
+curl -X POST http://localhost:4567/api/v1/sources/7374498796507972405/prefs \
+     -H 'Content-Type: application/json' -d '{"quality":"1080p"}'
+
+# List an extension repository index
+curl "http://localhost:4567/api/v1/extensions/repo?url=https://example.com/repo/index.json"
+
+# Install an extension
+curl -X POST http://localhost:4567/api/v1/extensions/install \
+     -H 'Content-Type: application/json' \
+     -d '{"repoUrl":"https://example.com/repo","apk":"com.example.mylib.apk"}'
+
+# Uninstall it
+curl -X POST http://localhost:4567/api/v1/extensions/uninstall \
+     -H 'Content-Type: application/json' -d '{"pkg":"com.example.mylib"}'
+```
+
+> Source IDs are 64-bit values and are returned as **strings** in the API.
+> Keep them as strings in your client — JavaScript numbers lose precision above
+> 2^53 and lookups would 404.
+
+---
+
+## The web UI
+
+Open `http://localhost:4567` in a browser. The UI is a single vanilla-JS page
+with:
+
+- **Sidebar** — sources grouped by extension package (so a 60-mirror package
+  shows as one entry, not sixty), plus a Favorites view.
+- **Catalog** — Popular / Latest / Search per source.
+- **Reader** — image pages for manga chapters.
+- **Player** — plays every format: HLS (hls.js), DASH (dash.js), and direct
+  MP4/WebM, all routed through the streaming proxy.
+- **Extension manager** — browse a repository index, install/uninstall, see
+  per-extension status (all from the "＋ Extensions" button).
+- **Source settings** — a "⚙ Config" button per source renders its declared
+  preferences (switches, dropdowns, text fields) and saves them.
+- **Favorites** — star titles and jump back to the last chapter you read.
+- **Cloudflare modal** — solves challenges by hand with a live headless browser.
+- **i18n** — English and Spanish out of the box; add a file in `lang/` for more.
+
+---
+
+## Building and running
+
+### Requirements
+
+- **JDK 21** (Temurin recommended). Gradle downloads itself via the wrapper.
+- Chrome/Chromium if you want to solve Cloudflare challenges manually
+  (the bundled one, or `--chrome <path>`).
+
+### Lightweight build (recommended for a VPS)
+
+```bash
+cd /home/asking/Escritorio/miwayomi
+./gradlew :server:installDist   # produces server/build/install/server/
+./gradlew --stop                # frees the Gradle daemons (RAM)
+./start.sh                      # uses the distribution if present
+```
+
+The JVM is started with a small heap and `SerialGC`:
+`-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC`
+(measured ~160–170 MB RSS at rest). Override RAM with
+`MIWAYOMI_MEM="-Xmx768m" ./start.sh`.
+
+### Dev mode
+
+```bash
+cd /home/asking/Escritorio/miwayomi
+./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://127.0.0.1:8191"
+```
+
+### CLI options
+
+| Flag | Default | Meaning |
+| ---- | ------- | ------- |
+| `--port`, `-p` | `4567` | Listen port. |
+| `--host`, `-h` | `0.0.0.0` | Listen address. |
+| `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
+| `--flaresolverr`, `-f` | *(none)* | FlareSolverr URL for optional auto-solving. |
+| `--chrome` | *(auto)* | Explicit Chrome/Chromium path for the manual modal. |
+
+### Verify
+
+```bash
+curl http://localhost:4567/api/v1/health   # {"status":"ok",...}
+```
+
+Open `http://localhost:4567` for the web UI.
+
+### Shut down
+
+```bash
+pkill -f "server:run"; pkill -f "flaresolverr.py"
+```
+
+> **Restart tip:** if the port is already in use after a rebuild, an old
+> process is still alive. Kill it first:
+> `pkill -9 -f "server/build/install/server/lib"`.
+
+---
+
+## Creating your own extension
+
+> **Legally safe, by design.** miwayomi does **not** tell you to download or
+> redistribute anyone's extensions. Instead, this section teaches you how to
+> write your **own** compatible source, compile it, and load it. What you build
+> is yours — but be responsible: respect the terms of service of the sites you
+> write sources for, and never use this to infringe copyright.
+
+There are two ways to add your own source. Both are valid; the built-in route
+is faster for learning, the APK route matches the ecosystem format.
+
+### Option A — the fastest path: a built-in source
+
+Every source is just an object that implements the `MangaSource` contract. The
+simplest possible new source is a Kotlin class in
+`server/src/main/kotlin/miwayomi/builtin/` — exactly like `DemoSource.kt`.
+Write it, rebuild, and it appears in `/sources`. No APK involved.
+
+### Option B — a real extension APK (the ecosystem format)
+
+This is what third-party extensions look like, and what miwayomi's pipeline is
+built for. You need three things: a **manifest**, a **source class**, and a
+**build** that produces an APK.
+
+#### 1. The manifest
+
+The APK's `AndroidManifest.xml` announces the catalog class:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <meta-data
+            android:name="tachiyomi.extension.class"
+            android:value="com.example.demolib.DemoLibFactory" />
+    </application>
+</manifest>
+```
+
+The class referenced must be either a `SourceFactory`
+(`fun createSources(): List<MangaSource>`) or a direct `MangaSource` subclass.
+
+#### 2. The source
+
+Here is a complete, original example — a small manga source that parses a
+fictional HTML site (`https://demo-manga.example`). It compiles against the
+`source-api` module in this repository (which is why you can build it yourself
+without downloading anything).
+
+```kotlin
+package com.example.demolib
+
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.Jsoup
+
+class DemoLib : HttpSource() {
+
+    override val name = "DemoLib"
+    override val lang = "en"
+    override val baseUrl = "https://demo-manga.example"
+    override val supportsLatest = true
+
+    override fun getFilterList() = FilterList()
+
+    // ---------- Catalog ----------
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/popular?page=$page", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage =
+        response.use { parseMangaPage(it) }
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/latest?page=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        response.use { parseMangaPage(it) }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET("$baseUrl/search?q=$query&page=$page", headers)
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        response.use { parseMangaPage(it) }
+
+    private fun parseMangaPage(response: Response): MangasPage {
+        val doc = Jsoup.parse(response.body.string())
+        val mangas = doc.select("a.manga").map { a ->
+            SManga.create().apply {
+                url = a.attr("href")
+                title = a.selectFirst(".title")?.text().orEmpty()
+                thumbnail_url = a.selectFirst("img")?.attr("src")
+            }
+        }
+        val hasNext = !doc.select("a.next").isEmpty()
+        return MangasPage(mangas, hasNext)
+    }
+
+    // ---------- Details ----------
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val doc = Jsoup.parse(response.body.string())
+        return SManga.create().apply {
+            title = doc.selectFirst("h1")?.text().orEmpty()
+            description = doc.selectFirst(".description")?.text()
+            status = when (doc.selectFirst(".status")?.text()) {
+                "Ongoing" -> SManga.ONGOING
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            genre = doc.select(".tag").joinToString(", ") { it.text() }
+            initialized = true
+        }
+    }
+
+    // ---------- Chapters ----------
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val doc = Jsoup.parse(response.body.string())
+        return doc.select("a.chapter").map { a ->
+            SChapter.create().apply {
+                url = a.attr("href")
+                name = a.selectFirst(".num")?.text().orEmpty()
+                date_upload = System.currentTimeMillis()
+            }
+        }.reversed() // newest first
+    }
+
+    // ---------- Pages ----------
+
+    override fun pageListParse(response: Response): List<Page> {
+        val doc = Jsoup.parse(response.body.string())
+        return doc.select("img.page").mapIndexed { i, img ->
+            Page(i, img.attr("src"))
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = response.body.string()
+}
+
+// A factory lets one APK provide several sources.
+class DemoLibFactory : SourceFactory {
+    override fun createSources() = listOf(DemoLib())
+}
+```
+
+#### 3. Build it
+
+A minimal Gradle build that compiles against the source API and packages the
+APK:
+
+```kotlin
+plugins {
+    id("com.android.application")
+    kotlin("android")
+}
+
+android {
+    namespace = "com.example.demolib"
+    compileSdk = 30
+    defaultConfig { minSdk = 21 }
+}
+
+dependencies {
+    implementation("eu.kanade.tachiyomi:source-api:1.0")   // the API this repo ports
+    implementation("org.jsoup:jsoup:1.17.2")
+}
+```
+
+Run the build and you get an APK whose `classes.dex` contains your source.
+
+#### 4. Install it in miwayomi
+
+- **Dropping the file in:** copy the APK into `<data>/extensions/` and restart.
+  miwayomi discovers it, converts it, and registers the source.
+- **Through the API:** `POST /api/v1/extensions/install` with the APK URL.
+
+Then confirm it in the API:
+
+```bash
+curl http://localhost:4567/api/v1/sources | python3 -m json.tool
+```
+
+> **The same shape, any author:** because loading is format-driven, any APK
+> that follows this contract (manifest + source class + dex) will load. That is
+> precisely why miwayomi makes no claims about, and takes no responsibility
+> for, extensions from other authors.
+
+---
+
+## Streaming internals
+
+miwayomi proxies media so that every request carries the headers the source
+requires — without those, many CDNs refuse to serve.
+
+- **HLS** (`.m3u8`) — `/hls` downloads the manifest, rewrites every segment URI
+  (including `URI=` inside `EXT-X-KEY`/`EXT-X-MAP`) to go through miwayomi, and
+  serves it; segments are proxied with `Range` support. The web player uses
+  `hls.js`.
+- **DASH** (`.mpd`) — `/dash` downloads the manifest and rewrites
+  `media=`/`initialization=` of `SegmentTemplate`/`SegmentList` to
+  `/dashseg?base=...&rel=...`. The `rel` parameter keeps `$Number%05d$`-style
+  templates **raw** so dash.js substitutes them before requesting each segment.
+- **Direct files** (MP4/WebM) — `/proxy` streams with `Range` support.
+
+All four proxies use **chunked streaming** (64 KB chunks, no full-file
+buffering) and re-forward `Content-Range`/`Accept-Ranges`/`Content-Length`.
+`MimeTypes.kt` infers the correct content type from the file extension even
+when the origin sends `application/octet-stream`.
+
+> **Cache note:** the proxy deliberately uses `CacheControl.FORCE_NETWORK` so
+> OkHttp never serves a stale full body and ignores the requested `Range`.
+> (A cached 200 instead of a streamed 206 is exactly the bug this prevents.)
+
+---
+
+## Cloudflare challenges
+
+Some sources sit behind Cloudflare's anti-bot. miwayomi gives you **two** ways
+to unlock them:
+
+1. **Manual (always available, recommended):** the web UI opens a modal with a
+   **live headless Chrome** (via CDP). You solve the challenge by hand, miwayomi
+   captures the cookies (including HttpOnly `cf_clearance`) and — because
+   Cloudflare binds those cookies to a User-Agent — remembers the Chrome UA for
+   that host. Subsequent requests fly through (~1 s).
+2. **FlareSolverr (optional):** if configured, `CloudflareInterceptor` first
+   tries the automatic solver. If it fails or isn't configured, it throws a
+   `CloudflareChallengeException` and the manual modal appears.
+
+The flow, in one sentence: `CloudflareInterceptor` detects a challenge
+(403/429/503 + CF headers or a "Just a moment" body) → auto-solve attempt →
+else manual modal → cookies + UA stored → next request passes.
+
+---
+
+## Local persistence
+
+Everything is stored in `data/cache/miwayomi.db` (SQLite, WAL mode):
+
+| Store | What it holds |
+| ----- | ------------- |
+| `kv_store` | Key-value settings (including resolved hosts `cf_ua_*`). |
+| `cookies`  | Cloudflare and site cookies, persisted across restarts. |
+| `favorites`| Favorites + last-read chapter per entry. |
+
+Source preferences live in `data/prefs/source_<id>.properties`.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause & fix |
+| ------- | ----------- |
+| `Stub!` at runtime on an `android.*` method | The class is only a stub in `android.jar`; implement it in `android-compat` and remove it from the jar via `regenerate-android-jar.py`. |
+| `VerifyError: ... not assignable to ContextWrapper` | The `Context` hierarchy is wrong; keep `Application : ContextWrapper : Context` and drop it from the jar. |
+| Port already in use after rebuild | Old process alive: `pkill -9 -f "server/build/install/server/lib"`. |
+| One package shows as dozens of sources | A single APK can declare many mirrors; the web UI groups them by package. |
+| A source's preferences don't appear | `PreferenceScreen` must alias `androidx.preference.PreferenceScreen` (it does in `source-api`). |
+| Videos return nothing / 422 | Likely double-encoded JSON body — handled by `FixDoubleEncodedJsonInterceptor`; ensure `Content-Length` is stripped on rebuild. |
+| Incremental build seems stale | Use a clean build: `./gradlew :server:clean :server:installDist`. |
+
+---
+
+## Roadmap and contributing
+
+The project is alive and the best way to help is to make it yours:
+
+- **More web UI views** — filters, in-place sorting, per-chapter page caching.
+- **Per-source JS engines** — isolate QuickJs/Duktape runtimes per extension.
+- **Torrent streaming** — the stub exists in `core-common`; the real thing is
+  next.
+- **Your own sources** — follow the guide above; a source you wrote is the best
+  kind of contribution to your own server.
+
+Good first places to read the code: `builtin/DemoSource.kt` (a complete
+source), `extension/JarFixer.kt` (the cleverest file), and
+`api/StreamingRoutes.kt` (the streaming heart).
+
+---
+
+## Legal notice
+
+- miwayomi is an **execution engine**. It does not distribute, host, index,
+  recommend, or endorse any content, source, or extension repository.
+- Extensions are **third-party software**; their behavior and the sites they
+  reach are their responsibility. The user is responsible for the extensions
+  they install and the content they access.
+- The project's design is inspired by the **Tachiyomi/Aniyomi** open-source
+  ecosystem and reuses portions of their source APIs. Those portions remain
+  under their original license (Apache-2.0); see `NOTICE-ANIYOMI.md` for
+  attribution. miwayomi is **not affiliated with, endorsed by, or a fork of**
+  Tachiyomi, Aniyomi, or any related project.
+- Do **not** use miwayomi to infringe copyright, bypass access controls you are
+  not authorized to bypass, or redistribute content you do not have rights to.
+  Respect the terms of service of every site you interact with.
+- The name **miwayomi** is a fan-made portmanteau and is not associated with
+  any existing brand or work.
+
+---
+
+## Glossary
+
+| Term | Meaning |
+| ---- | ------- |
+| **Extension** | An APK in the Tachiyomi/Aniyomi format that declares one or more sources. |
+| **Source** | A catalog provider (manga or anime) implementing the source API. |
+| **Factory** | `SourceFactory`/`AnimeSourceFactory`; how one APK provides several sources. |
+| **Shim** | The `android-compat` layer that makes extensions believe Android exists. |
+| **DEX → JAR** | The conversion (via dex2jar) that turns an Android bytecode APK into JVM bytecode. |
+| **JarFixer** | The ASM pass that repairs bytecode the JVM would otherwise reject. |
+| **Child-first ClassLoader** | Loads the extension's own classes before the parent's. |
+| **HLS / DASH** | Adaptive streaming formats (`.m3u8` / `.mpd`) transparently proxied. |
+| **CDP** | Chrome DevTools Protocol, used for the manual Cloudflare modal. |
+| **FlareSolverr** | Optional service that attempts to auto-solve Cloudflare challenges. |
+| **SQLite store** | Local persistence for cookies, favorites, and settings. |

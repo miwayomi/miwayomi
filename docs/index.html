@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>miwayomi · Beautiful reading, everywhere</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --panel: #fff; --border: #e4e7ef;
+    --text: #1c2130; --muted: #6b7280;
+    --accent: #f47521; --accent-hi: #ff8c3b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 0 26px; height: 58px;
+    background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar .brand { font-weight: 800; font-size: 19px; display: flex; align-items: center; gap: 9px; }
+  .topbar .brand::before { content: ""; width: 10px; height: 20px; border-radius: 3px; background: linear-gradient(180deg, var(--accent-hi), var(--accent)); }
+  .topbar .links { margin-left: auto; display: flex; gap: 4px; }
+  .topbar .links a { color: var(--muted); font-weight: 600; font-size: 13.5px; padding: 8px 12px; border-radius: 8px; }
+  .topbar .links a:hover { color: var(--accent); background: #f4f5fa; text-decoration: none; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 48px 26px 80px; }
+
+  .hero { text-align: center; padding: 40px 20px 10px; }
+  .hero h1 { margin: 0; font-size: 58px; font-weight: 800; letter-spacing: -1px; }
+  .hero h1 .dot { color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 18px; max-width: 640px; margin: 14px auto 26px; }
+  .hero .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; background: linear-gradient(180deg, var(--accent-hi), var(--accent)); color: #fff; font-weight: 700; padding: 12px 26px; border-radius: 12px; box-shadow: 0 6px 18px rgba(244,117,33,.3); }
+  .btn:hover { filter: brightness(1.06); text-decoration: none; }
+  .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(28,33,48,.06); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .pill { display: inline-block; margin-top: 20px; background: rgba(244,117,33,.12); border: 1px solid rgba(244,117,33,.45); color: var(--accent); border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600; }
+
+  h2 { margin: 56px 0 14px; font-size: 26px; font-weight: 800; letter-spacing: -.3px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: 0 6px 20px rgba(28,33,48,.05); }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .shots img { width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(28,33,48,.08); }
+
+  .note { background: #fff7ed; border: 1px solid #ffd9b0; border-left: 4px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin: 24px 0; font-size: 14px; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">miwayomi</div>
+  <nav class="links">
+    <a href="index.html">Home</a>
+    <a href="documentation.html">Docs</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>miwayomi<span class="dot">.</span></h1>
+    <p>A self-contained server that runs Aniyomi/Tachiyomi-format catalog extensions on the JVM — no Android, no emulator, no cloud.</p>
+    <div class="cta">
+      <a class="btn" href="documentation.html">Read the documentation</a>
+      <a class="btn ghost" href="https://github.com" target="_blank" rel="noopener">View source</a>
+    </div>
+    <div class="pill">mi·wa·yo·mi — “beautiful reading”</div>
+  </div>
+
+  <h2>What it is</h2>
+  <div class="grid">
+    <div class="card"><h3>⚙️ Execution engine</h3><p>Loads extensions in the Tachiyomi/Aniyomi format and exposes their sources through a clean REST API and a web UI.</p></div>
+    <div class="card"><h3>📱 No Android</h3><p>A crafted shim (android-compat) makes extensions believe an Android runtime exists — on a plain JVM.</p></div>
+    <div class="card"><h3>🪶 Lightweight</h3><p>A single java process, ~160–170 MB RSS at rest. Comfortable on a 4 GB VPS.</p></div>
+    <div class="card"><h3>🎬 Full playback</h3><p>HLS, DASH and direct MP4/WebM through a chunked, memory-neutral streaming proxy.</p></div>
+    <div class="card"><h3>🗄️ Persistence</h3><p>Cookies, resolved Cloudflare hosts, favorites and reading progress in SQLite.</p></div>
+    <div class="card"><h3>🌐 Multilingual UI</h3><p>One JSON file per language — add a file to add a language.</p></div>
+  </div>
+
+  <h2>Interface preview</h2>
+  <div class="shots">
+    <img src="assets/shot-1.png" alt="miwayomi interface">
+    <img src="assets/shot-2.png" alt="miwayomi interface">
+    <img src="assets/shot-3.png" alt="miwayomi interface">
+  </div>
+
+  <h2>Run it yourself</h2>
+  <div class="card">
+    <h3>Quick start</h3>
+    <p>Requirements: JDK 21. Then:</p>
+    <p style="font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#14141a;color:#e8e8f0;border-radius:10px;padding:12px 14px;margin-top:10px">
+      ./gradlew :server:installDist<br>
+      ./start.sh<br>
+      <span style="color:#6b7280"># open http://localhost:4567</span>
+    </p>
+    <p>Full build, run and extension guides are in the <a href="documentation.html">documentation</a>.</p>
+  </div>
+
+  <div class="note">
+    miwayomi is an execution engine: it does not distribute, host, or recommend any content, source, or repository.
+    Screenshots are for illustration purposes only; all cover art, titles, and extension names belong to their respective owners.
+    Project inspired by the Tachiyomi/Aniyomi open-source ecosystem (Apache-2.0); see <b>NOTICE-ANIYOMI.md</b> for attribution.
+  </div>
+</main>
+
+<footer>miwayomi · “beautiful reading” · built with ❤</footer>
+
+</body>
+</html>

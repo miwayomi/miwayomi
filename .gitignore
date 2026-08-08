@@ -1,0 +1,14 @@
+.gradle/
+build/
+out/
+*.iml
+.idea/
+.vscode/
+.kotlin/
+local.properties
+data/
+*.apk
+!extensions/*.apk
+flaresolverr/
+cleanup_ws.py
+strip_comments.py

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>miwayomi</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" onclick="goHome()">miwayomi</div>
+  <nav class="main-nav">
+    <button class="nav-link" data-nav="home" onclick="goHome()" data-i18n="nav.home">Home</button>
+    <button class="nav-link" data-nav="manga" onclick="goBrowse('manga')" data-i18n="nav.manga">Manga</button>
+    <button class="nav-link" data-nav="anime" onclick="goBrowse('anime')" data-i18n="nav.anime">Anime</button>
+    <button class="nav-link" data-nav="favorites" onclick="showFavorites()" data-i18n="nav.favorites">Favorites</button>
+    <a class="nav-link" href="/docs.html" data-i18n="docs.title">Docs</a>
+  </nav>
+  <div class="top-search">
+    <input id="globalSearch" type="text" placeholder="Search..." onkeydown="if(event.key==='Enter')globalSearchGo()">
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" title="Settings" onclick="openSettings()">⚙</button>
+    <select id="langSelect" onchange="setLang(this.value)" title="Language">
+      <option value="en">English</option>
+      <option value="es">Español</option>
+    </select>
+    <button class="btn-primary" onclick="openExtensions()" data-i18n="nav.extensions">＋ Extensions</button>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar" id="sources">
+    <div class="sidebar-filters">
+      <input id="srcFilter" type="text" placeholder="Filter sources..." oninput="renderSources()">
+      <div class="type-tabs">
+        <button class="type-tab active" data-type="all" onclick="setTypeFilter('all')" data-i18n="nav.all">All</button>
+        <button class="type-tab" data-type="manga" onclick="setTypeFilter('manga')" data-i18n="nav.manga">Manga</button>
+        <button class="type-tab" data-type="anime" onclick="setTypeFilter('anime')" data-i18n="nav.anime">Anime</button>
+      </div>
+    </div>
+    <div class="sidebar-list" id="srcList"></div>
+  </aside>
+
+  <main id="content" class="content">
+    <div class="empty" id="empty">
+      <div class="empty-logo">miwayomi</div>
+      <h2 data-i18n="empty.title">Select a source</h2>
+      <p data-i18n="empty.text">Choose a manga or anime source from the list to explore its catalog.</p>
+    </div>
+  </main>
+</div>
+
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<div id="cfModal" class="modal hidden" onclick="if(event.target===this)cfClose()">
+  <div class="modal-box cf-box">
+    <h3 style="margin-top:0" data-i18n="cf.title">Resolve Cloudflare challenge</h3>
+    <p class="cf-help" data-i18n-html="cf.help">This site asks to solve an anti-bot captcha. In the screenshot: if a
+      <b>&#8220;I&#8217;m not a robot&#8221; checkbox</b> appears, click on it; if the <b>&#8220;Security verification&#8221; spinner</b>
+      appears, wait a few seconds for it to pass. When the screenshot shows the real site (or content loads),
+      press <b>&#8220;&#10003; I&#8217;ve solved it&#8221;</b>.</p>
+    <div class="cf-stage" id="cfStage">
+      <img id="cfShot" alt="Challenge screenshot" class="cf-shot">
+    </div>
+    <div class="cf-url" id="cfUrl" data-i18n="cf.urlLoading">Loading browser...</div>
+    <div class="cf-actions">
+      <button class="btn-primary" onclick="cfFinish()" data-i18n="cf.done">✓ I've solved it</button>
+      <button onclick="cfKey('tab')" data-i18n="cf.tab">Tab</button>
+      <button onclick="cfKey('enter')" data-i18n="cf.enter">Enter</button>
+      <button onclick="cfClose()" data-i18n="cf.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

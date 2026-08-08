@@ -1,0 +1,235 @@
+package eu.kanade.tachiyomi.network
+
+import java.io.File
+import java.sql.Connection
+import java.sql.DriverManager
+
+class SqliteStore(dbFile: File) : AutoCloseable {
+
+    private val connection: Connection = run {
+        dbFile.parentFile?.mkdirs()
+        DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
+    }
+
+    init {
+        connection.createStatement().use { st ->
+            st.executeUpdate("PRAGMA journal_mode=WAL;")
+            st.executeUpdate("PRAGMA busy_timeout=3000;")
+            st.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS kv_store (
+                    key   TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )""",
+            )
+            st.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS cookies (
+                    host       TEXT NOT NULL,
+                    name       TEXT NOT NULL,
+                    value      TEXT NOT NULL,
+                    domain     TEXT NOT NULL,
+                    path       TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    secure     INTEGER NOT NULL,
+                    http_only  INTEGER NOT NULL,
+                    host_only  INTEGER NOT NULL,
+                    PRIMARY KEY (host, name)
+                )""",
+            )
+            st.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS favorites (
+                    source_id       TEXT NOT NULL,
+                    url             TEXT NOT NULL,
+                    title           TEXT NOT NULL,
+                    thumbnail_url   TEXT,
+                    type            TEXT NOT NULL,
+                    added_at        INTEGER NOT NULL,
+                    last_read_url   TEXT,
+                    last_read_name  TEXT,
+                    PRIMARY KEY (source_id, url)
+                )""",
+            )
+        }
+    }
+
+    @Synchronized
+    fun kvGet(key: String): String? =
+        connection.prepareStatement("SELECT value FROM kv_store WHERE key = ?").use { ps ->
+            ps.setString(1, key)
+            ps.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+        }
+
+    @Synchronized
+    fun kvSet(key: String, value: String) {
+        connection.prepareStatement("INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)").use { ps ->
+            ps.setString(1, key)
+            ps.setString(2, value)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun kvDelete(key: String) {
+        connection.prepareStatement("DELETE FROM kv_store WHERE key = ?").use { ps ->
+            ps.setString(1, key)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun kvAll(prefix: String = ""): List<Pair<String, String>> =
+        connection.prepareStatement("SELECT key, value FROM kv_store WHERE key LIKE ?").use { ps ->
+            ps.setString(1, "$prefix%")
+            ps.executeQuery().use { rs ->
+                val out = mutableListOf<Pair<String, String>>()
+                while (rs.next()) out.add(rs.getString(1) to rs.getString(2))
+                out
+            }
+        }
+
+    @Synchronized
+    fun cookieAll(): List<StoredCookie> =
+        connection.createStatement().use { st ->
+            st.executeQuery(
+                "SELECT host, name, value, domain, path, expires_at, secure, http_only, host_only FROM cookies",
+            ).use { rs ->
+                val out = mutableListOf<StoredCookie>()
+                while (rs.next()) {
+                    out.add(
+                        StoredCookie(
+                            host = rs.getString(1),
+                            name = rs.getString(2),
+                            value = rs.getString(3),
+                            domain = rs.getString(4),
+                            path = rs.getString(5),
+                            expiresAt = rs.getLong(6),
+                            secure = rs.getInt(7) != 0,
+                            httpOnly = rs.getInt(8) != 0,
+                            hostOnly = rs.getInt(9) != 0,
+                        ),
+                    )
+                }
+                out
+            }
+        }
+
+    @Synchronized
+    fun cookieUpsert(c: StoredCookie) {
+        connection.prepareStatement(
+            """INSERT OR REPLACE INTO cookies (host, name, value, domain, path, expires_at, secure, http_only, host_only)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ).use { ps ->
+            ps.setString(1, c.host)
+            ps.setString(2, c.name)
+            ps.setString(3, c.value)
+            ps.setString(4, c.domain)
+            ps.setString(5, c.path)
+            ps.setLong(6, c.expiresAt)
+            ps.setInt(7, if (c.secure) 1 else 0)
+            ps.setInt(8, if (c.httpOnly) 1 else 0)
+            ps.setInt(9, if (c.hostOnly) 1 else 0)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun cookieDelete(host: String, name: String) {
+        connection.prepareStatement("DELETE FROM cookies WHERE host = ? AND name = ?").use { ps ->
+            ps.setString(1, host)
+            ps.setString(2, name)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun cookieDeleteAll() {
+        connection.createStatement().use { it.executeUpdate("DELETE FROM cookies") }
+    }
+
+    @Synchronized
+    fun favoriteAll(): List<Favorite> =
+        connection.createStatement().use { st ->
+            st.executeQuery(
+                "SELECT source_id, url, title, thumbnail_url, type, added_at, last_read_url, last_read_name FROM favorites",
+            ).use { rs ->
+                val out = mutableListOf<Favorite>()
+                while (rs.next()) {
+                    out.add(
+                        Favorite(
+                            sourceId = rs.getString(1),
+                            url = rs.getString(2),
+                            title = rs.getString(3),
+                            thumbnailUrl = rs.getString(4),
+                            type = rs.getString(5),
+                            addedAt = rs.getLong(6),
+                            lastReadUrl = rs.getString(7),
+                            lastReadName = rs.getString(8),
+                        ),
+                    )
+                }
+                out
+            }
+        }
+
+    @Synchronized
+    fun favoriteGet(sourceId: String, url: String): Favorite? =
+        connection.prepareStatement(
+            "SELECT source_id, url, title, thumbnail_url, type, added_at, last_read_url, last_read_name FROM favorites WHERE source_id = ? AND url = ?",
+        ).use { ps ->
+            ps.setString(1, sourceId)
+            ps.setString(2, url)
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) null else Favorite(
+                    sourceId = rs.getString(1),
+                    url = rs.getString(2),
+                    title = rs.getString(3),
+                    thumbnailUrl = rs.getString(4),
+                    type = rs.getString(5),
+                    addedAt = rs.getLong(6),
+                    lastReadUrl = rs.getString(7),
+                    lastReadName = rs.getString(8),
+                )
+            }
+        }
+
+    @Synchronized
+    fun favoriteUpsert(f: Favorite) {
+        connection.prepareStatement(
+            """INSERT OR REPLACE INTO favorites (source_id, url, title, thumbnail_url, type, added_at, last_read_url, last_read_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        ).use { ps ->
+            ps.setString(1, f.sourceId)
+            ps.setString(2, f.url)
+            ps.setString(3, f.title)
+            ps.setString(4, f.thumbnailUrl)
+            ps.setString(5, f.type)
+            ps.setLong(6, f.addedAt)
+            ps.setString(7, f.lastReadUrl)
+            ps.setString(8, f.lastReadName)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun favoriteDelete(sourceId: String, url: String) {
+        connection.prepareStatement("DELETE FROM favorites WHERE source_id = ? AND url = ?").use { ps ->
+            ps.setString(1, sourceId)
+            ps.setString(2, url)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun favoriteSetProgress(sourceId: String, url: String, lastReadUrl: String?, lastReadName: String?) {
+        connection.prepareStatement("UPDATE favorites SET last_read_url = ?, last_read_name = ? WHERE source_id = ? AND url = ?").use { ps ->
+            ps.setString(1, lastReadUrl)
+            ps.setString(2, lastReadName)
+            ps.setString(3, sourceId)
+            ps.setString(4, url)
+            ps.executeUpdate()
+        }
+    }
+
+    override fun close() {
+        runCatching { connection.close() }
+    }
+}
