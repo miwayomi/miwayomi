@@ -58,13 +58,12 @@ body {
   align-items: center;
   gap: 9px;
 }
-.brand::before {
-  content: "";
-  width: 11px;
-  height: 24px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
-  box-shadow: 0 0 14px rgba(244, 117, 33, 0.5);
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 .main-nav { display: flex; gap: 4px; }
 .nav-link {
