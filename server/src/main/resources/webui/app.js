@@ -6,10 +6,23 @@ let state = {
   activeSource: null,
   detail: null,
   typeFilter: "all",
+  currentView: "home",
 };
 
 let cfRetry = null;
 let cfTimer = null;
+
+// In-app navigation stack (SPA has no real browser history between views)
+let navStack = [];
+function navPush(restore) { navStack.push(restore); }
+function goBack() {
+  if (navStack.length) {
+    const restore = navStack.pop();
+    if (typeof restore === "function") restore();
+  } else if (window.history.length > 1) {
+    window.history.back();
+  }
+}
 
 const DEFAULT_LANG = "en";
 const AVAILABLE_LANGS = ["en", "es"];
@@ -257,6 +270,7 @@ async function goBrowse(type) {
 }
 
 async function renderHome() {
+  state.currentView = "home";
   const main = $("#content");
   const manga = state.sources.manga || [];
   const anime = state.sources.anime || [];
@@ -330,6 +344,12 @@ function favCard(f) {
 /* ---------------- Browse (source) ---------------- */
 
 function openSource(source) {
+  navPush(() => { setNav("home"); renderHome(); });
+  renderBrowseView(source);
+}
+
+function renderBrowseView(source) {
+  state.currentView = "browse";
   state.activeSource = source;
   setNav(source.type);
   renderSources();
@@ -378,7 +398,8 @@ async function loadGrid(url, title) {
 
 /* ---------------- Detail ---------------- */
 
-async function openEntry(sourceId, type, url) {
+async function openEntry(sourceId, type, url, backTo) {
+  navPush(backTo || (() => { if (state.activeSource) renderBrowseView(state.activeSource); }));
   const main = $("#content");
   main.innerHTML = `<div class="loading">${escapeHtml(t("common.loading"))}</div>`;
   let d = null;
@@ -392,12 +413,14 @@ async function openEntry(sourceId, type, url) {
 }
 
 async function renderDetail(type, d) {
+  state.currentView = "detail";
   const main = $("#content");
+  state.detailObj = d;
   state.detail = { type, url: d.url || "", title: d.title || t("detail.entry"), thumb: d.thumbnail_url || "" };
   const thumb = d.thumbnail_url ? `src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(d.thumbnail_url)}"` : "";
   const bg = d.thumbnail_url ? `style="background-image:url('/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(d.thumbnail_url)}')"` : "";
   main.innerHTML = `
-    <button class="btn-ghost" onclick="history.back()" style="margin-bottom:12px">← ${escapeHtml(t("reader.back"))}</button>
+    <button class="btn-ghost" onclick="goBack()" style="margin-bottom:12px">← ${escapeHtml(t("reader.back"))}</button>
     <div class="detail-hero">
       <div class="hero-bg" ${bg}></div>
       <div class="detail-body">
@@ -497,6 +520,7 @@ async function toggleFavorite(btn) {
 /* ---------------- Favorites ---------------- */
 
 async function showFavorites() {
+  state.currentView = "favorites";
   setNav("favorites");
   const main = $("#content");
   main.innerHTML = `<div class="loading">${escapeHtml(t("fav.loading"))}</div>`;
@@ -521,12 +545,14 @@ async function showFavorites() {
 
 function openFavorite(sourceId, type, url) {
   state.activeSource = { id: sourceId, type, name: "" };
-  openEntry(sourceId, type, url);
+  openEntry(sourceId, type, url, () => { setNav("favorites"); showFavorites(); });
 }
 
 /* ---------------- Reader ---------------- */
 
 async function openChapter(encUrl, name) {
+  state.currentView = "reader";
+  navPush(() => { if (state.detail) renderDetail(state.detail.type, state.detailObj); });
   const main = $("#content");
   main.innerHTML = `<div class="loading">${escapeHtml(t("reader.loadingPages"))}</div>`;
   try {
@@ -550,7 +576,7 @@ async function openChapter(encUrl, name) {
     }
     main.innerHTML = `
       <div class="reader-top">
-        <button class="btn-ghost" onclick="history.back()">← ${escapeHtml(t("reader.back"))}</button>
+        <button class="btn-ghost" onclick="goBack()">← ${escapeHtml(t("reader.back"))}</button>
         <h2 style="margin:0">${escapeHtml(name)}</h2>
       </div>
       <div class="viewer" id="viewer">
@@ -564,7 +590,9 @@ async function openChapter(encUrl, name) {
 
 /* ---------------- Player ---------------- */
 
-async function openEpisode(encUrl, name) {
+async function openEpisode(encUrl, name, noPush) {
+  state.currentView = "player";
+  if (!noPush) navPush(() => { if (state.detail) renderDetail(state.detail.type, state.detailObj); });
   const main = $("#content");
   main.innerHTML = `<div class="loading">${escapeHtml(t("player.fetching"))}</div>`;
   try {
@@ -584,7 +612,7 @@ async function openEpisode(encUrl, name) {
 
     main.innerHTML = `
       <div class="reader-top">
-        <button class="btn-ghost" onclick="history.back()">← ${escapeHtml(t("reader.back"))}</button>
+        <button class="btn-ghost" onclick="goBack()">← ${escapeHtml(t("reader.back"))}</button>
         <div class="player-title">${escapeHtml(name)}</div>
       </div>
       <div class="player-wrap">
@@ -618,7 +646,7 @@ function renderPlayerEpisodes(eps, currentEnc) {
   if (!box) return;
   box.innerHTML = `<div class="list-title">${escapeHtml(t("detail.episodes"))}</div>` +
     (eps.length ? eps.map((e, i) => `
-      <div class="player-episode ${decodeURIComponent(currentEnc) === decodeURIComponent(e.url) ? "active" : ""}" onclick="openEpisode('${encodeURIComponent(e.url)}','${escapeHtml(e.name)}')">
+      <div class="player-episode ${decodeURIComponent(currentEnc) === decodeURIComponent(e.url) ? "active" : ""}" onclick="openEpisode('${encodeURIComponent(e.url)}','${escapeHtml(e.name)}',true)">
         <span class="pe-num">E${e.episode_number ?? i + 1}</span><span>${escapeHtml(e.name)}</span>
       </div>`).join("") : `<div class="empty">${escapeHtml(t("detail.noEpisodes"))}</div>`);
 }
@@ -835,7 +863,10 @@ function renderExtensionsModal() {
       <button class="btn-primary" onclick="confirmAddRepo()">${escapeHtml(t("ext.add"))}</button>
       <button onclick="hideAddRepo()">${escapeHtml(t("common.cancel"))}</button>
     </div>
-    <input id="repoSearch" type="text" placeholder="${escapeHtml(t("ext.searchPh"))}" oninput="filterRepo()" class="repo-search">
+    <div class="repo-filters">
+      <input id="repoSearch" type="text" placeholder="${escapeHtml(t("ext.searchPh"))}" oninput="filterRepo()" class="repo-search">
+      <select id="repoLang" onchange="filterRepo()" class="repo-lang" title="${escapeHtml(t("ext.filterLang"))}"></select>
+    </div>
     <div id="repoList" class="repo-list"><div class="loading">${escapeHtml(t("ext.loading"))}</div></div>`;
 }
 
@@ -863,13 +894,16 @@ function removeRepo(i) {
 async function loadRepo() {
   const url = REPOS[activeRepo] || DEFAULT_REPO;
   const list = $("#repoList");
-  list.innerHTML = `<div class="loading">${escapeHtml(t("ext.consulting"))}</div>`;
+  const prevScroll = list ? list.scrollTop : 0;
+  if (list) list.innerHTML = `<div class="loading">${escapeHtml(t("ext.consulting"))}</div>`;
   try {
     const data = await getJSON(`${api}/extensions/repo?url=${encodeURIComponent(url)}`);
     window.__repo = data.extensions || [];
-    renderRepo(window.__repo, "");
+    populateLangFilter();
+    renderRepo(window.__repo, $("#repoSearch")?.value || "", $("#repoLang")?.value || "");
+    if (list) list.scrollTop = prevScroll;
   } catch (e) {
-    list.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
+    if (list) list.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
   }
 }
 
@@ -892,11 +926,25 @@ function summarizeSources(sources) {
   return " · " + str;
 }
 
-function renderRepo(entries, q) {
+function populateLangFilter() {
+  const sel = $("#repoLang");
+  if (!sel) return;
+  const entries = window.__repo || [];
+  const langs = [...new Set(entries.map((e) => e.lang).filter(Boolean))].sort();
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${escapeHtml(t("ext.allLangs"))}</option>` +
+    langs.map((l) => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+  if (current && langs.includes(current)) sel.value = current;
+}
+
+function renderRepo(entries, q, lang) {
   const list = $("#repoList");
   if (!list) return;
   const filt = q.trim().toLowerCase();
-  const filtered = entries.filter((e) => !filt || (e.name + " " + e.pkg + " " + e.lang).toLowerCase().includes(filt));
+  const langF = (lang || "").trim();
+  const filtered = entries.filter((e) =>
+    (!filt || (e.name + " " + e.pkg + " " + e.lang).toLowerCase().includes(filt)) &&
+    (!langF || (e.lang || "") === langF));
   const byLang = {};
   for (const e of filtered) (byLang[e.lang] = byLang[e.lang] || []).push(e);
   const langOrder = Object.keys(byLang).sort();
@@ -917,7 +965,7 @@ function renderRepo(entries, q) {
 }
 
 function filterRepo() {
-  renderRepo(window.__repo || [], $("#repoSearch").value);
+  renderRepo(window.__repo || [], $("#repoSearch")?.value || "", $("#repoLang")?.value || "");
 }
 
 async function installExt(apk, btn) {
@@ -934,7 +982,7 @@ async function installExt(apk, btn) {
       btn.textContent = t("ext.installed");
       loadSources();
       loadRepo();
-      renderHome();
+      if (state.currentView === "home") renderHome();
     } else {
       btn.textContent = "Error";
       btn.disabled = false;
@@ -961,7 +1009,7 @@ async function uninstallExt(pkg, btn) {
     if (data.ok) {
       loadSources();
       loadRepo();
-      renderHome();
+      if (state.currentView === "home") renderHome();
     } else {
       btn.textContent = t("ext.uninstall");
       btn.disabled = false;

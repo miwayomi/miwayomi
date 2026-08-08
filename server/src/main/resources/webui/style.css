@@ -616,6 +616,19 @@ button:active { transform: scale(0.97); }
   font-size: 13px;
   outline: none;
 }
+.repo-filters { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.repo-filters .repo-search { margin-top: 0; flex: 1; }
+.repo-lang {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 9px 10px;
+  font-size: 13px;
+  outline: none;
+  max-width: 170px;
+  flex-shrink: 0;
+}
 .repo-list { margin-top: 10px; max-height: 52vh; overflow: auto; }
 .repo-item {
   display: flex;

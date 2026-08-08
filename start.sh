@@ -23,16 +23,26 @@ fi
 
 echo "> Starting miwayomi on :${PORT} ..."
 
-BIN="server/build/install/server/bin/server"
 MEM_DEFAULT="-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC"
 MEM="${MIWAYOMI_MEM:-$MEM_DEFAULT}"
-if [ -x "${BIN}" ]; then
-  echo "> Using installed distribution (lightweight): ${BIN}"
+
+# Runnable fat jar (downloaded from Releases or built with :server:shadowJar)
+JAR="${MIWAYOMI_JAR:-}"
+if [ -z "${JAR}" ] && [ -f "miwayomi-all.jar" ]; then JAR="$(pwd)/miwayomi-all.jar"; fi
+if [ -z "${JAR}" ] && [ -f "server/build/libs/miwayomi-all.jar" ]; then JAR="$(pwd)/server/build/libs/miwayomi-all.jar"; fi
+
+if [ -n "${JAR}" ]; then
+  echo "> Using runnable JAR: ${JAR}"
   echo "> JVM memory: ${MEM}"
-  JAVA_OPTS="${MEM}" nohup "${BIN}" --data "${DATA}" --port "${PORT}" ${FS_ARG} \
+  JAVA_OPTS="${MEM}" nohup java -jar "${JAR}" --data "${DATA}" --port "${PORT}" ${FS_ARG} \
+    > /tmp/miwayomi.log 2>&1 &
+elif [ -x "server/build/install/server/bin/server" ]; then
+  echo "> Using installed distribution (lightweight): server/build/install/server/bin/server"
+  echo "> JVM memory: ${MEM}"
+  JAVA_OPTS="${MEM}" nohup server/build/install/server/bin/server --data "${DATA}" --port "${PORT}" ${FS_ARG} \
     > /tmp/miwayomi.log 2>&1 &
 else
-  echo "> No installed distribution -> gradlew (generate with: ./gradlew :server:installDist)"
+  echo "> No JAR or distribution -> gradlew (build the jar with: ./gradlew :server:shadowJar)"
   nohup ./gradlew :server:run --args="--data ${DATA} --port ${PORT} ${FS_ARG}" \
     --console=plain > /tmp/miwayomi.log 2>&1 &
 fi

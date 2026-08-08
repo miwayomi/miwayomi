@@ -89,6 +89,13 @@ java -jar miwayomi-all.jar --data ./data --port 4567
 java -jar miwayomi-all.jar --data %cd%\data --port 4567
 ```
 
+To build the same JAR locally instead of downloading:
+
+```bash
+./gradlew :server:shadowJar    # generates server/build/libs/miwayomi-all.jar
+java -jar server/build/libs/miwayomi-all.jar --data ./data --port 4567
+```
+
 FlareSolverr is **enabled by default** at `http://127.0.0.1:8191`; if it is not
 running, Cloudflare challenges fall back to the manual modal. Open
 `http://localhost:4567`.
@@ -120,8 +127,10 @@ cd /home/asking/Escritorio/miwayomi
 
 This starts **FlareSolverr** in the background (if available in `/tmp/flaresolverr-src`)
 and **miwayomi**, leaving logs at `/tmp/miwayomi.log` and `/tmp/fs_src.log`.
-If you already built the distribution (`:server:installDist`), `start.sh` uses it directly
-(lightweight); otherwise it falls back to `gradlew :server:run`.
+`start.sh` prefers the runnable **fat jar** (`server/build/libs/miwayomi-all.jar`, a
+`miwayomi-all.jar` in the folder, or `MIWAYOMI_JAR=/path/to/miwayomi-all.jar`). Without a
+JAR it uses the installed distribution (`:server:installDist`); otherwise it falls back to
+`gradlew :server:run`.
 
 ### Manual option (dev mode)
 

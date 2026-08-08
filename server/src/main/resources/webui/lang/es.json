@@ -57,6 +57,8 @@
   "ext.more": "+{0} más",
   "ext.addRepo": "Añadir repositorio",
   "ext.add": "Añadir",
+  "ext.allLangs": "Todos los idiomas",
+  "ext.filterLang": "Filtrar por idioma",
 
   "settings.title": "Ajustes",
   "settings.appearance": "Apariencia",
