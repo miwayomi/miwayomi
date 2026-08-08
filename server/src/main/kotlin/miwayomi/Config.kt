@@ -6,7 +6,7 @@ data class ServerConfig(
     val host: String = "0.0.0.0",
     val port: Int = 4567,
     val dataDir: File = File("data"),
-    val flareSolverrUrl: String? = null,
+    val flareSolverrUrl: String? = "http://127.0.0.1:8191",
     val chromePath: String? = null,
 ) {
     val extensionsDir: File get() = File(dataDir, "extensions")
