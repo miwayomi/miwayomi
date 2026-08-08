@@ -75,6 +75,24 @@ miwayomi/
 
 ## How to start the server
 
+### Runnable JAR (any OS) — easiest
+
+Download the cross-platform JAR from the
+[Releases](https://github.com/miwayomi/miwayomi/releases) page (you only need
+**JDK 21**).
+
+```bash
+# Linux / macOS
+java -jar miwayomi-all.jar --data ./data --port 4567
+
+# Windows (PowerShell / CMD)
+java -jar miwayomi-all.jar --data %cd%\data --port 4567
+```
+
+FlareSolverr is **enabled by default** at `http://127.0.0.1:8191`; if it is not
+running, Cloudflare challenges fall back to the manual modal. Open
+`http://localhost:4567`.
+
 ### Lightweight mode (production / VPS) — recommended
 
 Builds an **installed distribution** (a single `.jar` with all libraries) and runs a
