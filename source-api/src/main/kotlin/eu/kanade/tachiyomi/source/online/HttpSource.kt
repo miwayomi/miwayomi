@@ -140,7 +140,10 @@ abstract class HttpSource : CatalogueSource {
 
     protected abstract fun chapterListParse(response: Response): List<SChapter>
 
-    protected abstract fun chapterPageParse(response: Response): SChapter
+    // Legacy method, removed from extensions-lib >= 1.4. Kept as open so
+    // sources compiled from keiyoushi source (which don't override it) compile fine.
+    protected open fun chapterPageParse(response: Response): SChapter =
+        throw UnsupportedOperationException("chapterPageParse is deprecated")
 
     @Suppress("DEPRECATION")
     override suspend fun getPageList(chapter: SChapter): List<Page> {

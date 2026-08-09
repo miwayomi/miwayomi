@@ -5,11 +5,26 @@ import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.AnimeSourceFactory
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import miwayomi.source.AnimeSourceManager
 import miwayomi.source.MangaSourceManager
 import java.io.File
 import java.net.URLClassLoader
 import java.util.concurrent.ConcurrentHashMap
+import java.util.jar.JarFile
+
+@Serializable
+data class SourceJarMeta(
+    val pkgName: String,
+    val name: String,
+    val versionName: String = "0",
+    val versionCode: Long = 0,
+    val isNsfw: Boolean = false,
+    val isAnime: Boolean = false,
+    val sourceClasses: List<String> = emptyList(),
+    val factoryClass: String? = null,
+)
 
 class ExtensionManager(
     private val mangaSourceManager: MangaSourceManager,
@@ -29,6 +44,10 @@ class ExtensionManager(
     private val extensions = ConcurrentHashMap<String, LoadedExtension>()
 
     private val sourceOwner = ConcurrentHashMap<Long, String>()
+
+    private companion object {
+        const val MARKER = "META-INF/miwayomi-extension.json"
+    }
 
     val loaded: List<LoadedExtension>
         get() = extensions.values.toList()
@@ -56,7 +75,84 @@ class ExtensionManager(
                 e.printStackTrace()
             }
         }
+
+        // Extensiones compiladas desde fuente (sin APK): jars con marcador
+        val jars = dir.listFiles { f ->
+            f.isFile && f.extension.equals("jar", ignoreCase = true) && hasSourceJarMarker(f)
+        }?.sortedBy { it.name }.orEmpty()
+        jars.forEach { jar ->
+            try {
+                loadSourceJar(jar)
+                ok++
+            } catch (e: Throwable) {
+                System.err.println("[miwayomi] Error cargando jar de fuente $jar: ${e}")
+                e.printStackTrace()
+            }
+        }
         return ok
+    }
+
+    private fun hasSourceJarMarker(jar: File): Boolean = try {
+        JarFile(jar).use { it.getJarEntry(MARKER) != null }
+    } catch (e: Exception) {
+        false
+    }
+
+    fun readSourceJarMeta(jar: File): SourceJarMeta? = try {
+        JarFile(jar).use { jf ->
+            val entry = jf.getJarEntry(MARKER) ?: return null
+            val text = jf.getInputStream(entry).bufferedReader().use { it.readText() }
+            Json { ignoreUnknownKeys = true }.decodeFromString<SourceJarMeta>(text)
+        }
+    } catch (e: Exception) {
+        System.err.println("[miwayomi] Marcador inválido en $jar: $e")
+        null
+    }
+
+    /**
+     * Carga una extensión compilada desde fuente (Kotlin -> JVM), sin dex2jar.
+     * El jar debe contener META-INF/miwayomi-extension.json con el metadata.
+     */
+    fun loadSourceJar(jar: File): LoadedExtension {
+        val meta = readSourceJarMeta(jar)
+            ?: throw IllegalStateException("Sin marcador miwayomi en $jar")
+        val extMeta = ExtensionMeta(
+            pkgName = meta.pkgName,
+            versionName = meta.versionName,
+            versionCode = meta.versionCode,
+            isNsfw = meta.isNsfw,
+            isAnime = meta.isAnime,
+            sourceClasses = meta.sourceClasses,
+            factoryClass = meta.factoryClass,
+            name = meta.name,
+        )
+
+        val classLoader = ChildFirstURLClassLoader(
+            arrayOf(jar.toURI().toURL()),
+            ExtensionManager::class.java.classLoader,
+        )
+
+        val instances = mutableListOf<Any>()
+        val classesToLoad = meta.sourceClasses + listOfNotNull(meta.factoryClass)
+        for (className in classesToLoad) {
+            try {
+                val clazz = Class.forName(className, false, classLoader)
+                val instance = clazz.getDeclaredConstructor().newInstance()
+                when (instance) {
+                    is SourceFactory -> instances.addAll(instance.createSources())
+                    is AnimeSourceFactory -> instances.addAll(instance.createSources())
+                    else -> instances.add(instance)
+                }
+            } catch (e: Throwable) {
+                System.err.println("[miwayomi] Error instanciando $className en $jar: ${e}")
+                e.printStackTrace(System.err)
+            }
+        }
+
+        val loaded = registerInstances(extMeta, apk = jar, jar = jar, classLoader = classLoader, instances = instances)
+        extensions[extMeta.pkgName] = loaded
+        println("[miwayomi] Extensión (fuente) cargada: ${extMeta.name} (${extMeta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
+        return loaded
     }
 
     fun load(apk: File): LoadedExtension {
@@ -117,6 +213,19 @@ class ExtensionManager(
             }
         }
 
+        val loaded = registerInstances(meta, apk, jar, classLoader, instances)
+        extensions[meta.pkgName] = loaded
+        println("[miwayomi] Extensión cargada: ${meta.name} (${meta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
+        return loaded
+    }
+
+    private fun registerInstances(
+        meta: ExtensionMeta,
+        apk: File,
+        jar: File,
+        classLoader: URLClassLoader,
+        instances: List<Any>,
+    ): LoadedExtension {
         var manga = 0
         var anime = 0
         val registered = mutableListOf<Any>()
@@ -136,11 +245,7 @@ class ExtensionManager(
                 }
             }
         }
-
-        val loaded = LoadedExtension(meta, apk, jar, classLoader, manga, anime, registered)
-        extensions[meta.pkgName] = loaded
-        println("[miwayomi] Extensión cargada: ${meta.name} (${meta.pkgName}) - manga: $manga, anime: $anime")
-        return loaded
+        return LoadedExtension(meta, apk, jar, classLoader, manga, anime, registered)
     }
 
     fun uninstall(pkg: String): LoadedExtension? {
