@@ -293,16 +293,14 @@ button:active { transform: scale(0.97); }
 }
 .row-title::before { content: ""; width: 4px; height: 18px; border-radius: 3px; background: var(--accent); }
 .row-scroll {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
-  overflow-x: auto;
   padding: 8px 4px 16px;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
 }
+.cat-sentinel { display: flex; justify-content: center; padding: 18px 0 4px; }
+.end-msg { color: var(--muted); font-size: 13px; padding: 8px 0 2px; }
 .card {
-  flex: 0 0 170px;
-  scroll-snap-align: start;
   cursor: pointer;
   border-radius: var(--radius);
   overflow: hidden;

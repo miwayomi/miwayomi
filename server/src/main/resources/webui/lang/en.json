@@ -38,6 +38,7 @@
   "toolbar.popular": "Popular",
   "toolbar.latest": "Latest",
   "toolbar.config": "⚙ Config",
+  "toolbar.end": "No more results",
 
   "ext.title": "Extensions",
   "ext.help": "Paste the URL of the repository index (<code>index.min.json</code> or <code>index.pb</code>), press <b>Load</b> and choose what to install. The extension is downloaded and activated instantly.",

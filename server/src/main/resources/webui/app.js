@@ -7,6 +7,7 @@ let state = {
   detail: null,
   typeFilter: "all",
   currentView: "home",
+  catalog: null,
 };
 
 let cfRetry = null;
@@ -377,23 +378,72 @@ async function doSearch() {
   await loadGrid(`${api}/${state.activeSource.type}/${state.activeSource.id}/search?query=${encodeURIComponent(q)}`, t("toolbar.search"));
 }
 
+function catalogCard(m) {
+  const type = state.activeSource.type;
+  return `
+    <div class="card" onclick="openEntry('${state.activeSource.id}','${type}','${encodeURIComponent(m.url)}')">
+      ${m.thumbnail_url ? `<img loading="lazy" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(m.thumbnail_url)}">` : `<div class="card-img-placeholder">${escapeHtml((m.title || "?").charAt(0).toUpperCase())}</div>`}
+      <div class="card-title">${escapeHtml(m.title)}</div>
+    </div>`;
+}
+
 async function loadGrid(url, title) {
   const box = $("#catalog");
-  box.innerHTML = `<div class="loading">${escapeHtml(t("common.loading"))}</div>`;
-  try {
-    const data = await getJSON(url);
-    const list = data.mangas || data.animes || [];
-    if (list.length === 0) { box.innerHTML = `<div class="empty">${escapeHtml(t("common.noResults"))}</div>`; return; }
-    const type = state.activeSource.type;
-    const cards = list.map((m) => `
-      <div class="card" onclick="openEntry('${state.activeSource.id}','${type}','${encodeURIComponent(m.url)}')">
-        ${m.thumbnail_url ? `<img loading="lazy" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(m.thumbnail_url)}">` : `<div class="card-img-placeholder">${escapeHtml((m.title || "?").charAt(0).toUpperCase())}</div>`}
-        <div class="card-title">${escapeHtml(m.title)}</div>
-      </div>`).join("");
-    box.innerHTML = `<div class="row-title">${escapeHtml(title)}</div><div class="row-scroll">${cards}</div>`;
-  } catch (e) {
-    box.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
+  if (!box) return;
+  state.catalog = { url, page: 1, hasNext: true, loading: false, error: false, errorMsg: "" };
+  box.innerHTML = `<div class="row-title">${escapeHtml(title)}</div>` +
+    `<div class="row-scroll" id="catalogGrid"></div><div id="catSentinel" class="cat-sentinel"></div>`;
+  await loadMore();
+  if (state.catalog && !state.catalog.loading) {
+    const grid = $("#catalogGrid");
+    if (grid && grid.children.length === 0) {
+      if (state.catalog.error) box.innerHTML = `<div class="error">${escapeHtml(t("common.error", state.catalog.errorMsg))}</div>`;
+      else box.innerHTML = `<div class="empty">${escapeHtml(t("common.noResults"))}</div>`;
+      state.catalog = null;
+    }
   }
+}
+
+async function loadMore() {
+  const c = state.catalog;
+  const grid = $("#catalogGrid");
+  const sentinel = $("#catSentinel");
+  if (!c || !grid || c.loading || !c.url) return;
+  c.loading = true;
+  if (sentinel) sentinel.innerHTML = `<div class="loading">${escapeHtml(t("common.loading"))}</div>`;
+  const sep = c.url.includes("?") ? "&" : "?";
+  let ok = false;
+  try {
+    const data = await getJSON(`${c.url}${sep}page=${c.page}`);
+    const list = data.mangas || data.animes || [];
+    if (list.length) grid.insertAdjacentHTML("beforeend", list.map(catalogCard).join(""));
+    c.hasNext = data.hasNextPage === true;
+    c.page++;
+    ok = true;
+  } catch (e) {
+    c.error = true;
+    c.errorMsg = e.message;
+    if (sentinel) sentinel.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
+  }
+  c.loading = false;
+  if (!ok) return;
+  const content = $("#content");
+  const fills = !!content && content.scrollHeight <= content.clientHeight + 150;
+  if (c.hasNext && fills) {
+    loadMore();
+  } else if (sentinel) {
+    sentinel.innerHTML = c.hasNext
+      ? ""
+      : (grid.children.length ? `<div class="end-msg">${escapeHtml(t("toolbar.end"))}</div>` : "");
+  }
+}
+
+function onContentScroll() {
+  const c = state.catalog;
+  if (!c || !c.url || c.loading || !c.hasNext || !$("#catalogGrid")) return;
+  const content = $("#content");
+  if (!content) return;
+  if (content.scrollTop + content.clientHeight >= content.scrollHeight - 700) loadMore();
 }
 
 /* ---------------- Detail ---------------- */
@@ -1153,6 +1203,8 @@ function closeModal() { $("#modal").classList.add("hidden"); }
   await loadI18n(currentLang());
   const sel = $("#langSelect");
   if (sel) sel.value = currentLang();
+  const contentEl = $("#content");
+  if (contentEl) contentEl.addEventListener("scroll", onContentScroll);
   try {
     await loadSources();
     setTypeFilter("all");

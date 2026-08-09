@@ -38,6 +38,7 @@
   "toolbar.popular": "Popular",
   "toolbar.latest": "Últimos",
   "toolbar.config": "⚙ Config",
+  "toolbar.end": "Sin más resultados",
 
   "ext.title": "Extensiones",
   "ext.help": "Pega aquí la URL del índice del repo (<code>index.min.json</code> o <code>index.pb</code>), pulsa <b>Cargar</b> y elige qué instalar. La extensión se descarga y se activa al momento.",
