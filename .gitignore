@@ -12,3 +12,8 @@ data/
 flaresolverr/
 cleanup_ws.py
 strip_comments.py
+
+# packaging output
+packaging/stage/
+packaging/dist/
+miwayomi-all.jar.bak

@@ -1202,6 +1202,35 @@ function showError(msg) {
 function openModal() { $("#modal").classList.remove("hidden"); }
 function closeModal() { $("#modal").classList.add("hidden"); }
 
+/* ---------------- Update banner ---------------- */
+
+async function checkUpdate() {
+  try {
+    const d = await getJSON(`${api}/update`);
+    if (!d || !d.available) return;
+    let banner = document.getElementById("updateBanner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "updateBanner";
+      banner.className = "update-banner";
+      document.body.appendChild(banner);
+    }
+    const ver = d.latestVersion || "";
+    const hint = d.downloaded
+      ? `<span class="ub-hint">${escapeHtml(t("update.restart"))}</span>`
+      : (d.url ? `<a class="ub-hint" href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(t("update.openUrl"))}</a>` : "");
+    banner.innerHTML =
+      `<span class="ub-icon">⬆</span>` +
+      `<span class="ub-text"><b>${escapeHtml(t("update.title"))}</b> ${escapeHtml(t("update.msg", ver))} ${hint}</span>` +
+      `<button class="ub-close" onclick="dismissUpdate()">${escapeHtml(t("update.dismiss"))}</button>`;
+  } catch (e) { }
+}
+
+function dismissUpdate() {
+  const b = document.getElementById("updateBanner");
+  if (b) b.remove();
+}
+
 /* ---------------- Boot ---------------- */
 
 (async function boot() {
@@ -1210,6 +1239,7 @@ function closeModal() { $("#modal").classList.add("hidden"); }
   if (sel) sel.value = currentLang();
   const contentEl = $("#content");
   if (contentEl) contentEl.addEventListener("scroll", onContentScroll);
+  checkUpdate();
   try {
     await loadSources();
     setTypeFilter("all");

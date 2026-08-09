@@ -99,6 +99,12 @@
   "detail.cancelled": "Cancelled",
   "detail.onHiatus": "On hiatus",
 
+  "update.title": "Update available",
+  "update.msg": "New version {0} is ready.",
+  "update.restart": "It's downloaded. Close and relaunch miwayomi to apply it.",
+  "update.openUrl": "Open download",
+  "update.dismiss": "Dismiss",
+
   "reader.loadingPages": "Loading pages...",
   "reader.noPages": "No pages",
   "reader.back": "← Back",

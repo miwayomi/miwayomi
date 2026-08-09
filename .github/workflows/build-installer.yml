@@ -1,0 +1,56 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build fat JAR
+        shell: bash
+        run: ./gradlew :server:shadowJar --no-daemon
+
+      - name: Derive version from tag
+        id: ver
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] && V="0.1.4"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Package installer with jpackage
+        shell: pwsh
+        run: |
+          mkdir dist -Force | Out-Null
+          jpackage `
+            --input server/build/libs `
+            --main-jar miwayomi-all.jar `
+            --main-class miwayomi.desktop.DesktopMainKt `
+            --name miwayomi `
+            --type exe `
+            --app-version "${{ steps.ver.outputs.version }}" `
+            --vendor miwayomi `
+            --win-menu `
+            --win-shortcut `
+            --dest dist
+
+      - name: Upload installer to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/miwayomi-*.exe

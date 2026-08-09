@@ -2,6 +2,7 @@ package miwayomi
 
 import android.app.Application
 import android.compat.CompatRuntime
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import miwayomi.api.registerApi
@@ -11,17 +12,22 @@ import miwayomi.di.AppModule
 import miwayomi.di.ConfigHolder
 import miwayomi.extension.ExtensionManager
 import miwayomi.source.MangaSourceManager
+import miwayomi.update.UpdateManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.awt.Desktop
+import java.net.URI
+import java.util.concurrent.CountDownLatch
 
-fun main(args: Array<String>) {
-    val config = parseArgs(args)
-
+fun buildServer(config: ServerConfig): EmbeddedServer<*, *> {
     CompatRuntime.setup(config.dataDir)
     Application.current = Application.create()
 
     ConfigHolder.config = config
     Injekt.importModule(AppModule)
+
+    UpdateManager.configure(config.dataDir)
+    UpdateManager.start()
 
     if (config.flareSolverrUrl != null) {
         println("[miwayomi] FlareSolverr habilitado en ${config.flareSolverrUrl}")
@@ -34,9 +40,25 @@ fun main(args: Array<String>) {
     Injekt.get<MangaSourceManager>().register(DemoSource())
     Injekt.get<MangaSourceManager>().register(MockCfSource())
 
-    val server = embeddedServer(Netty, port = config.port, host = config.host) {
+    return embeddedServer(Netty, port = config.port, host = config.host) {
         registerApi()
     }
+}
+
+fun openBrowser(port: Int) {
+    try {
+        if (!Desktop.isDesktopSupported()) return
+        val desktop = Desktop.getDesktop()
+        if (!desktop.isSupported(Desktop.Action.BROWSE)) return
+        desktop.browse(URI("http://127.0.0.1:$port/"))
+    } catch (e: Exception) {
+        // headless or sin navegador: se ignora, la URL se imprime igualmente
+    }
+}
+
+fun main(args: Array<String>) {
+    val config = parseArgs(args)
+    val server = buildServer(config)
 
     println("""
         |
@@ -47,5 +69,7 @@ fun main(args: Array<String>) {
         |
     """.trimMargin())
 
-    server.start(wait = true)
+    server.start(wait = false)
+    if (config.openBrowser) openBrowser(config.port)
+    CountDownLatch(1).await()
 }

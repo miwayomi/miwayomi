@@ -1,16 +1,20 @@
 package miwayomi
 
 import java.io.File
+import java.net.ServerSocket
 
 data class ServerConfig(
     val host: String = "0.0.0.0",
-    val port: Int = 4567,
+    val port: Int = 0,
     val dataDir: File = File("data"),
     val flareSolverrUrl: String? = "http://127.0.0.1:8191",
     val chromePath: String? = null,
+    val openBrowser: Boolean = true,
 ) {
     val extensionsDir: File get() = File(dataDir, "extensions")
 }
+
+fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
 fun parseArgs(args: Array<String>): ServerConfig {
     var config = ServerConfig()
@@ -28,8 +32,10 @@ fun parseArgs(args: Array<String>): ServerConfig {
                 val path = args.getOrNull(i + 1)?.takeIf { it.isNotBlank() }
                 config = config.copy(chromePath = path).also { i++ }
             }
+            "--no-open" -> config = config.copy(openBrowser = false)
         }
         i++
     }
+    if (config.port <= 0) config = config.copy(port = freePort())
     return config
 }

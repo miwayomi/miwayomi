@@ -11,6 +11,21 @@ answer for themselves; miwayomi simply runs them and serves their catalog.
 
 ---
 
+## Download
+
+| Platform | File | How to run |
+| -------- | ---- | ---------- |
+| Windows | [miwayomi-setup.exe](https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-setup.exe) | Run the installer (Start Menu / desktop shortcut). |
+| Any OS | [miwayomi-all.jar](https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-all.jar) | `java -jar miwayomi-all.jar` (needs JDK 21). |
+
+All releases: <https://github.com/miwayomi/miwayomi/releases>
+
+The app **auto-updates**: on launch it checks GitHub for a newer release and the
+WebUI shows a banner when one is available — it downloads it and applies it on
+restart.
+
+---
+
 ## Table of contents
 
 1. [The story behind the name](#the-story-behind-the-name)
@@ -358,6 +373,7 @@ Base URL: `http://<host>:4567/api/v1` — JSON in, JSON out.
 | ------ | ---- | ------- |
 | `GET` | `/health` | Liveness + source counts. |
 | `GET` | `/sources` | All installed manga & anime sources (with owning package). |
+| `GET` | `/update` | Current version, latest GitHub release, update status. |
 | `GET` | `/manga/{sourceId}/popular?page=` | Popular manga catalog. |
 | `GET` | `/manga/{sourceId}/latest?page=` | Latest manga updates. |
 | `GET` | `/manga/{sourceId}/search?query=&page=` | Search manga. |
@@ -474,13 +490,45 @@ with:
 - Chrome/Chromium if you want to solve Cloudflare challenges manually
   (the bundled one, or `--chrome <path>`).
 
+### Quick start (desktop / JAR)
+
+`java -jar miwayomi-all.jar` (from the
+[Releases](https://github.com/miwayomi/miwayomi/releases) page) just works: it
+picks a **free port**, starts, and opens your default browser with the real URL.
+The launcher `./miwayomi` (macOS/Linux) / `miwayomi.bat` (Windows) does the same
+and opens a **dedicated app window** (Chrome/Edge `--app`), stopping the server
+when you close the window.
+
+```bash
+java -jar miwayomi-all.jar      # any OS — auto port + opens the browser
+./miwayomi                      # desktop launcher (app window)
+```
+
+Force a port with `--port 4567`; `--no-open` disables opening a browser.
+
+### Auto-update
+
+On startup the server checks GitHub for a newer release: if one exists it
+downloads the new JAR and the WebUI shows a banner ("New version available —
+close and relaunch to apply"). The next launch applies it (previous JAR kept as
+`miwayomi-all.jar.bak`). Status: `GET /api/v1/update`.
+
+### Windows installer
+
+`packaging/build-installer.sh` (needs NSIS: `sudo apt install nsis` /
+`brew install nsis` / `yay -S nsis`) produces
+`packaging/dist/miwayomi-setup-<version>.exe`. Pass
+`JRE_ZIP=temurin-21-windows-x64.zip` to bundle a JRE for a standalone installer.
+A GitHub Actions workflow also builds it automatically on each release
+(`.github/workflows/build-installer.yml`).
+
 ### Lightweight build (recommended for a VPS)
 
 ```bash
 cd /home/asking/Escritorio/miwayomi
 ./gradlew :server:installDist   # produces server/build/install/server/
 ./gradlew --stop                # frees the Gradle daemons (RAM)
-./start.sh                      # uses the distribution if present
+./start.sh                      # uses the distribution if present (headless)
 ```
 
 The JVM is started with a small heap and `SerialGC`:
@@ -492,18 +540,19 @@ The JVM is started with a small heap and `SerialGC`:
 
 ```bash
 cd /home/asking/Escritorio/miwayomi
-./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://127.0.0.1:8191"
+./gradlew :server:run --args="--data ./data --port 4567 --flaresolverr http://127.0.0.1:8191"
 ```
 
 ### CLI options
 
 | Flag | Default | Meaning |
 | ---- | ------- | ------- |
-| `--port`, `-p` | `4567` | Listen port. |
+| `--port`, `-p` | auto (free) | Listen port; omit for an automatic free port. |
 | `--host`, `-h` | `0.0.0.0` | Listen address. |
 | `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
-| `--flaresolverr`, `-f` | *(none)* | FlareSolverr URL for optional auto-solving. |
-| `--chrome` | *(auto)* | Explicit Chrome/Chromium path for the manual modal. |
+| `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
+| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
+| `--no-open` | off | Do not open a browser on start (headless). |
 
 ### Verify
 
@@ -516,7 +565,8 @@ Open `http://localhost:4567` for the web UI.
 ### Shut down
 
 ```bash
-pkill -f "server:run"; pkill -f "flaresolverr.py"
+pkill -f "miwayomi-all.jar"     # or close the app window / stop the launcher
+pkill -f "flaresolverr.py"
 ```
 
 > **Restart tip:** if the port is already in use after a rebuild, an old

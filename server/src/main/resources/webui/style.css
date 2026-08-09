@@ -645,6 +645,41 @@ button:active { transform: scale(0.97); }
 .repo-actions button { padding: 7px 12px; font-size: 12px; }
 .repo-add { margin-top: 10px; display: flex; gap: 8px; }
 
+/* ---------- Update banner ---------- */
+.update-banner {
+  position: fixed;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 640px;
+  width: fit-content;
+  background: var(--accent-dim);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+}
+.update-banner .ub-icon { font-size: 16px; }
+.update-banner .ub-text { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.update-banner .ub-hint { color: var(--muted); }
+.update-banner a.ub-hint { color: var(--accent-hi); }
+.update-banner .ub-close {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.update-banner .ub-close:hover { border-color: var(--accent); }
+
 /* ---------- Prefs ---------- */
 .prefs { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .pref-row {

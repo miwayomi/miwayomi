@@ -109,6 +109,13 @@
   .card2 { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
   .card2 h4 { margin: 0 0 8px; }
 
+  .downloads { margin: 22px 0 8px; padding: 20px 22px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 14px; }
+  .downloads h2 { margin: 0 0 6px; }
+  .downloads .grid2 { margin: 12px 0 0; }
+  .btn-dl { display: inline-block; margin: 8px 0 4px; padding: 10px 16px; background: var(--accent); color: #fff; font-weight: 700; border-radius: 10px; text-decoration: none; }
+  .btn-dl:hover { filter: brightness(1.1); }
+  .hint { color: var(--muted); font-size: 12.5px; }
+
   @media (max-width: 900px) { .toc { display: none; } main { padding: 20px; } }
 </style>
 </head>
@@ -126,6 +133,7 @@
 <div class="wrap">
   <nav class="toc">
     <h4>Contents</h4>
+    <a href="#downloads">Download</a>
     <a href="#story">The story</a>
     <a href="#what">What it is</a>
     <a href="#philosophy">Design philosophy</a>
@@ -153,6 +161,25 @@
       <h1>miwayomi<span class="dot">.</span></h1>
       <p>A self-contained server that runs <b>Aniyomi/Tachiyomi-format catalog extensions</b> on the JVM — with no Android device, no emulator, no cloud. This page documents everything: how it works, its technical requirements, its API, and how to make it yours.</p>
       <span class="pill">mi·wa·yo·mi — “beautiful reading”</span>
+    </div>
+
+    <div class="downloads" id="downloads">
+      <h2>Get miwayomi</h2>
+      <p>Pick your platform — both files come from the latest release and the app <b>auto-updates</b> itself.</p>
+      <div class="grid2">
+        <div class="card2">
+          <h4>🖥️ Windows</h4>
+          <p>Native installer — Start Menu &amp; desktop shortcut.</p>
+          <a class="btn-dl" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-setup.exe">⬇ Download installer (.exe)</a>
+        </div>
+        <div class="card2">
+          <h4>🐧 🍎 Any OS (JAR)</h4>
+          <p>Cross-platform JAR — needs <b>JDK 21</b>.</p>
+          <a class="btn-dl" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-all.jar">⬇ Download JAR</a>
+          <p class="hint">Run: <code>java -jar miwayomi-all.jar</code></p>
+        </div>
+      </div>
+      <p class="hint">All releases: <a href="https://github.com/miwayomi/miwayomi/releases">github.com/miwayomi/miwayomi/releases</a> · the Windows installer can also bundle a JRE for a fully standalone install.</p>
     </div>
 
     <h2 id="story">The story behind the name</h2>
@@ -293,6 +320,7 @@
       <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
       <tr><td>GET</td><td><code>/health</code></td><td>Liveness + source counts.</td></tr>
       <tr><td>GET</td><td><code>/sources</code></td><td>All installed manga &amp; anime sources.</td></tr>
+      <tr><td>GET</td><td><code>/update</code></td><td>Current version, latest GitHub release, update status.</td></tr>
       <tr><td>GET</td><td><code>/manga/{id}/popular|latest|search?query=&amp;page=</code></td><td>Manga catalog.</td></tr>
       <tr><td>GET</td><td><code>/manga/{id}/details|chapters|pages?url=</code></td><td>Manga data.</td></tr>
       <tr><td>GET</td><td><code>/anime/{id}/popular|latest|search</code></td><td>Anime catalog.</td></tr>
@@ -384,30 +412,41 @@ cp lang/en.json lang/fr.json
       <li>JDK 21 (Temurin recommended). Gradle downloads itself via the wrapper.</li>
       <li>Chrome/Chromium only if you want to solve Cloudflare challenges manually.</li>
     </ul>
-    <h3>Runnable JAR (any OS) — easiest</h3>
-    <p>Download the cross-platform JAR from the
-    <a href="https://github.com/miwayomi/miwayomi/releases">Releases</a> page (you only need JDK 21).</p>
-    <pre><span class="c"># Linux / macOS</span>
-java -jar miwayomi-all.jar --data ./data --port 4567
-
-<span class="c"># Windows (PowerShell / CMD)</span>
-java -jar miwayomi-all.jar --data %cd%\data --port 4567</pre>
-    <p>FlareSolverr is <b>enabled by default</b> at <code>http://127.0.0.1:8191</code>; if it is not running, Cloudflare challenges fall back to the manual modal. Open <code>http://localhost:4567</code>.</p>
+    <h3>Quick start (desktop / JAR)</h3>
+    <p><code>java -jar miwayomi-all.jar</code> (from the
+    <a href="https://github.com/miwayomi/miwayomi/releases">Releases</a> page) just works:
+    it picks a <b>free port</b>, starts and opens your default browser. The launcher
+    <code>./miwayomi</code> / <code>miwayomi.bat</code> opens a <b>dedicated app window</b>
+    (Chrome/Edge <code>--app</code>) and stops the server when you close it.</p>
+    <pre>java -jar miwayomi-all.jar      <span class="c"># any OS — auto port + opens the browser</span>
+./miwayomi                      <span class="c"># desktop launcher (app window)</span></pre>
+    <p>Force a port with <code>--port 4567</code>; <code>--no-open</code> disables opening a browser.</p>
+    <h3>Auto-update</h3>
+    <p>On startup the server checks GitHub for a newer release: if one exists it downloads the new JAR
+    and the WebUI shows a banner ("New version available — close and relaunch to apply"). The next launch
+    applies it. Status: <code>GET /api/v1/update</code>.</p>
+    <h3>Windows installer</h3>
+    <p><code>packaging/build-installer.sh</code> (needs NSIS: <code>sudo apt install nsis</code> /
+    <code>brew install nsis</code> / <code>yay -S nsis</code>) produces
+    <code>packaging/dist/miwayomi-setup-&lt;version&gt;.exe</code>. Pass
+    <code>JRE_ZIP=temurin-21-windows-x64.zip</code> to bundle a JRE for a standalone installer.
+    A GitHub Actions workflow also builds it automatically on each release.</p>
     <h3>Lightweight build (recommended for a VPS)</h3>
     <pre>./gradlew :server:installDist
 ./gradlew --stop                <span class="c"># frees the Gradle daemons (RAM)</span>
-./start.sh                      <span class="c"># uses the distribution if present</span></pre>
+./start.sh                      <span class="c"># uses the distribution if present (headless)</span></pre>
     <p>The JVM runs with <code>-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC</code>. Override RAM with <code>MIWAYOMI_MEM="-Xmx768m" ./start.sh</code>.</p>
     <h3>Dev mode</h3>
-    <pre>./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://127.0.0.1:8191"</pre>
+    <pre>./gradlew :server:run --args="--data ./data --port 4567 --flaresolverr http://127.0.0.1:8191"</pre>
     <h3>CLI options</h3>
     <table>
       <tr><th>Flag</th><th>Default</th><th>Meaning</th></tr>
-      <tr><td><code>--port</code>, <code>-p</code></td><td>4567</td><td>Listen port.</td></tr>
+      <tr><td><code>--port</code>, <code>-p</code></td><td>auto (free)</td><td>Listen port; omit for an automatic free port.</td></tr>
       <tr><td><code>--host</code>, <code>-h</code></td><td>0.0.0.0</td><td>Listen address.</td></tr>
       <tr><td><code>--data</code>, <code>-d</code></td><td>./data</td><td>Data directory (extensions, prefs, cache).</td></tr>
-      <tr><td><code>--flaresolverr</code>, <code>-f</code></td><td>—</td><td>FlareSolverr URL (optional auto-solve).</td></tr>
-      <tr><td><code>--chrome</code></td><td>auto</td><td>Explicit Chrome path for the manual modal.</td></tr>
+      <tr><td><code>--flaresolverr</code>, <code>-f</code></td><td>http://127.0.0.1:8191</td><td>FlareSolverr URL (blank disables).</td></tr>
+      <tr><td><code>--chrome</code></td><td>auto</td><td>Chrome/Chromium path for the manual CF modal.</td></tr>
+      <tr><td><code>--no-open</code></td><td>off</td><td>Do not open a browser on start (headless).</td></tr>
     </table>
     <h3>Verify</h3>
     <pre>curl http://localhost:4567/api/v1/health</pre>

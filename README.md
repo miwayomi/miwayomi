@@ -73,84 +73,103 @@ miwayomi/
 - To solve Cloudflare challenges manually you need Chrome/Chromium
   (the one bundled with FlareSolverr in `flaresolverr/`, or `--chrome <path>`).
 
-## How to start the server
+## Running
 
-### Runnable JAR (any OS) — easiest
+miwayomi runs in three ways, from "just works" to "proper server".
+
+### 1. Desktop app — one command, one window (macOS / Linux / Windows)
+
+`./miwayomi` and `miwayomi.bat` start everything with a single command: they
+pick a **free port**, start the server with all defaults, open a **dedicated
+app window** (Chrome/Edge/Chromium `--app` — no tabs or URL bar) and stop when
+you close the window.
+
+```bash
+./miwayomi      # macOS / Linux (run or double-click)
+miwayomi.bat    # Windows (double-click)
+```
+
+On Windows you can also install it properly with the **installer** (below).
+
+### 2. Plain JAR (any OS) — just works
 
 Download the cross-platform JAR from the
 [Releases](https://github.com/miwayomi/miwayomi/releases) page (you only need
-**JDK 21**).
+**JDK 21**) and run it — the port is optional (it picks a free one) and it
+opens your default browser with the real URL:
 
 ```bash
-# Linux / macOS
-java -jar miwayomi-all.jar --data ./data --port 4567
-
-# Windows (PowerShell / CMD)
-java -jar miwayomi-all.jar --data %cd%\data --port 4567
+java -jar miwayomi-all.jar
 ```
 
-To build the same JAR locally instead of downloading:
+Force a specific port with `--port 4567`; use `--no-open` for headless/server
+use. To build the JAR locally: `./gradlew :server:shadowJar`.
 
-```bash
-./gradlew :server:shadowJar    # generates server/build/libs/miwayomi-all.jar
-java -jar server/build/libs/miwayomi-all.jar --data ./data --port 4567
-```
-
-FlareSolverr is **enabled by default** at `http://127.0.0.1:8191`; if it is not
-running, Cloudflare challenges fall back to the manual modal. Open
-`http://localhost:4567`.
-
-### Lightweight mode (production / VPS) — recommended
-
-Builds an **installed distribution** (a single `.jar` with all libraries) and runs a
-single `java` process **without Gradle/Kotlin daemons**. Designed for 4 GB VPS.
+### 3. Headless server (production / VPS)
 
 ```bash
 cd /home/asking/Escritorio/miwayomi
-./gradlew :server:installDist     # generates server/build/install/server/
-./gradlew --stop                  # frees the Gradle daemons (RAM)
-
-# Start (uses the distribution if it exists; adjust RAM with MIWAYOMI_MEM)
-./start.sh
+./gradlew :server:installDist && ./gradlew --stop
+./start.sh       # uses the installed distribution, headless, logs in /tmp
 ```
 
-The JVM starts with a small heap and `SerialGC` (the lightest): `-Xmx512m -Xms64m
--XX:MaxMetaspaceSize=256m -XX:+UseSerialGC` (measured: ~160-170 MB RSS at rest).
-To change the RAM: `MIWAYOMI_MEM="-Xmx768m" ./start.sh`.
+The JVM runs with a small heap + `SerialGC` (`-Xmx512m -Xms64m
+-XX:MaxMetaspaceSize=256m -XX:+UseSerialGC`, ~160–170 MB RSS at rest). Tune RAM
+with `MIWAYOMI_MEM="-Xmx768m" ./start.sh`. Dev mode (no install):
+`./gradlew :server:run --args="--data ./data --port 4567"`.
 
-### Quick option (1 command, dev mode)
+### CLI options
+
+| Flag | Default | Meaning |
+| ---- | ------- | ------- |
+| `--port`, `-p` | auto | Listen port; omit for an automatic free port. |
+| `--host`, `-h` | `0.0.0.0` | Listen address. |
+| `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
+| `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
+| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
+| `--no-open` | off | Do not open a browser on start (headless). |
+
+### Auto-update
+
+On startup the server checks GitHub for a newer release. If one exists it
+**downloads the new JAR** automatically and the WebUI shows a banner
+("New version vX.Y.Z available — close and relaunch to apply"). The next launch
+applies it (the previous JAR is kept as `miwayomi-all.jar.bak`). Status:
+`GET /api/v1/update`.
+
+### Windows installer
+
+Get a native Windows `miwayomi-setup-<version>.exe` in two ways:
+
+**A) Build it locally from Linux/macOS with NSIS** (no Windows machine needed):
 
 ```bash
-cd /home/asking/Escritorio/miwayomi
-./start.sh
+sudo apt install nsis   # Debian / Ubuntu
+brew install nsis       # macOS (Homebrew)
+yay -S nsis             # Arch / EndeavourOS (the nsis package is in the AUR)
+
+./packaging/build-installer.sh 0.2.0
+# → packaging/dist/miwayomi-setup-0.2.0.exe
 ```
 
-This starts **FlareSolverr** in the background (if available in `/tmp/flaresolverr-src`)
-and **miwayomi**, leaving logs at `/tmp/miwayomi.log` and `/tmp/fs_src.log`.
-`start.sh` prefers the runnable **fat jar** (`server/build/libs/miwayomi-all.jar`, a
-`miwayomi-all.jar` in the folder, or `MIWAYOMI_JAR=/path/to/miwayomi-all.jar`). Without a
-JAR it uses the installed distribution (`:server:installDist`); otherwise it falls back to
-`gradlew :server:run`.
-
-### Manual option (dev mode)
+The installer bundles the JAR + launcher and creates Start Menu / desktop
+shortcuts. To make it fully standalone (bundles a JRE so the target PC does not
+need Java installed), pass a Windows JDK zip:
 
 ```bash
-# Terminal 1 — FlareSolverr (optional, auto-solve of Cloudflare)
-cd /tmp/flaresolverr-src && /tmp/fsvenv/bin/python src/flaresolverr.py --port 8191
-
-# Terminal 2 — miwayomi
-cd /home/asking/Escritorio/miwayomi
-./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://127.0.0.1:8191"
+JRE_ZIP=temurin-21-jdk_windows-x64_bin.zip ./packaging/build-installer.sh 0.2.0
 ```
 
-> Without FlareSolverr: omit `--flaresolverr http://127.0.0.1:8191`. The manual Cloudflare
-> modal still works (it uses the bundled Chrome). If `/tmp` is cleaned, the FlareSolverr
-> source is rebuilt with "option C" in the Cloudflare section.
+**B) Automatically on every release** via GitHub Actions
+(`.github/workflows/build-installer.yml`): on a tag `v*`, a `windows-latest`
+runner (WiX pre-installed) builds `miwayomi-<version>.exe` with `jpackage` and
+attaches it to the release. The installed app opens the dedicated app window
+(Edge/Chrome `--app`) and stops when the window is closed.
 
 ### Verify
 
 ```bash
-curl http://localhost:4567/api/v1/health        # {"status":"ok",...}
+curl http://localhost:4567/api/v1/health   # {"status":"ok",...}
 ```
 
 Open `http://localhost:4567` (WebUI).
@@ -158,7 +177,8 @@ Open `http://localhost:4567` (WebUI).
 ### Shut down
 
 ```bash
-pkill -f "server:run"; pkill -f "flaresolverr.py"
+pkill -f "miwayomi-all.jar"     # or close the app window / stop the launcher
+pkill -f "flaresolverr.py"      # optional FlareSolverr
 ```
 
 ## Cloudflare bypass
@@ -251,6 +271,7 @@ How it works internally:
 |---|---|
 | `GET /api/v1/health` | Server status |
 | `GET /api/v1/sources` | Loaded manga and anime sources |
+| `GET /api/v1/update` | Current version, latest GitHub release, update status |
 | `GET /api/v1/manga/{id}/popular?page=N` | Popular catalog (manga) |
 | `GET /api/v1/manga/{id}/search?query=...&page=N` | Search (manga) |
 | `GET /api/v1/manga/{id}/details?url=...` | Title details |
