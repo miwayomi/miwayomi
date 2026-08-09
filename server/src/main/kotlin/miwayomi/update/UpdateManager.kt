@@ -13,7 +13,7 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 
-const val MIWAYOMI_VERSION = "0.2.0"
+const val MIWAYOMI_VERSION = "0.2.1"
 const val MIWAYOMI_REPO = "miwayomi/miwayomi"
 
 @Serializable
