@@ -390,7 +390,7 @@ function catalogCard(m) {
 async function loadGrid(url, title) {
   const box = $("#catalog");
   if (!box) return;
-  state.catalog = { url, page: 1, hasNext: true, loading: false, error: false, errorMsg: "" };
+  state.catalog = { url, page: 1, hasNext: true, loading: false, error: false, errorMsg: "", seen: new Set() };
   box.innerHTML = `<div class="row-title">${escapeHtml(title)}</div>` +
     `<div class="row-scroll" id="catalogGrid"></div><div id="catSentinel" class="cat-sentinel"></div>`;
   await loadMore();
@@ -416,9 +416,14 @@ async function loadMore() {
   try {
     const data = await getJSON(`${c.url}${sep}page=${c.page}`);
     const list = data.mangas || data.animes || [];
-    if (list.length) grid.insertAdjacentHTML("beforeend", list.map(catalogCard).join(""));
-    c.hasNext = data.hasNextPage === true;
+    const newItems = list.filter((m) => {
+      if (!m.url || c.seen.has(m.url)) return false;
+      c.seen.add(m.url);
+      return true;
+    });
+    if (newItems.length) grid.insertAdjacentHTML("beforeend", newItems.map(catalogCard).join(""));
     c.page++;
+    c.hasNext = data.hasNextPage === true && list.length > 0 && newItems.length > 0;
     ok = true;
   } catch (e) {
     c.error = true;
@@ -428,8 +433,8 @@ async function loadMore() {
   c.loading = false;
   if (!ok) return;
   const content = $("#content");
-  const fills = !!content && content.scrollHeight <= content.clientHeight + 150;
-  if (c.hasNext && fills) {
+  const atBottom = !!content && (content.scrollTop + content.clientHeight >= content.scrollHeight - 700);
+  if (c.hasNext && atBottom) {
     loadMore();
   } else if (sentinel) {
     sentinel.innerHTML = c.hasNext
