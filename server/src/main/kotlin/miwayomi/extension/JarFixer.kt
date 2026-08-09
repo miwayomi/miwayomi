@@ -53,9 +53,10 @@ object JarFixer {
             }
 
             classes.values.forEach { cn ->
-                fixWrongInitOwner(cn, needInit)
+                fixWrongInitOwner(cn, needInit, classes)
                 fixConstructorSuperCall(cn, needInit)
                 fixPhantomNew(cn, needInit)
+                fixWrongFieldNew(cn, needInit, classes)
             }
 
             var changed = true
@@ -71,8 +72,10 @@ object JarFixer {
                         var slot = 1
                         for (t in Type.getArgumentTypes(desc)) {
                             when (t.sort) {
-                                Type.LONG, Type.DOUBLE -> { m.instructions.add(VarInsnNode(if (t.sort == Type.LONG) Opcodes.LLOAD else Opcodes.DLOAD, slot)); slot += 2 }
+                                Type.LONG -> { m.instructions.add(VarInsnNode(Opcodes.LLOAD, slot)); slot += 2 }
+                                Type.DOUBLE -> { m.instructions.add(VarInsnNode(Opcodes.DLOAD, slot)); slot += 2 }
                                 Type.FLOAT -> { m.instructions.add(VarInsnNode(Opcodes.FLOAD, slot)); slot++ }
+                                Type.INT, Type.SHORT, Type.BYTE, Type.CHAR, Type.BOOLEAN -> { m.instructions.add(VarInsnNode(Opcodes.ILOAD, slot)); slot++ }
                                 else -> { m.instructions.add(VarInsnNode(Opcodes.ALOAD, slot)); slot++ }
                             }
                         }
@@ -131,26 +134,31 @@ object JarFixer {
         }
     }
 
-    private fun fixWrongInitOwner(cn: ClassNode, needInit: MutableSet<Pair<String, String>>) {
+    private fun fixWrongInitOwner(cn: ClassNode, needInit: MutableSet<Pair<String, String>>, classes: Map<String, ClassNode>) {
         cn.methods.forEach { m ->
             val insns = m.instructions
-            val pending = java.util.ArrayDeque<String>()
-            var pendingDup: String? = null
+            val pending = java.util.ArrayDeque<TypeInsnNode>()
+            var pendingDup: TypeInsnNode? = null
             var i = 0
             while (i < insns.size()) {
                 val n = insns[i]
                 when {
-                    n is TypeInsnNode && n.opcode == Opcodes.NEW -> pendingDup = n.desc
+                    n is TypeInsnNode && n.opcode == Opcodes.NEW -> pendingDup = n
                     n is InsnNode && n.opcode == Opcodes.DUP && pendingDup != null -> {
                         pending.push(pendingDup)
                         pendingDup = null
                     }
                     n is MethodInsnNode && n.opcode == Opcodes.INVOKESPECIAL && n.name == "<init>" -> {
                         if (!pending.isEmpty()) {
-                            val t = pending.pop()
+                            val newInsn = pending.pop()
+                            val t = newInsn.desc
                             if (n.owner != t) {
-                                n.owner = t
-                                needInit.add(t to n.desc)
+                                val real = realTypeOf(classes, t, n.owner)
+                                if (real != null) {
+                                    newInsn.desc = real
+                                    n.owner = real
+                                    needInit.add(real to n.desc)
+                                }
                             }
                         }
                     }
@@ -211,6 +219,103 @@ object JarFixer {
                 i++
             }
         }
+    }
+
+    private fun fixWrongFieldNew(cn: ClassNode, needInit: MutableSet<Pair<String, String>>, classes: Map<String, ClassNode>) {
+        cn.methods.forEach { m ->
+            val insns = m.instructions
+            var i = 0
+            while (i < insns.size()) {
+                val n = insns[i]
+                if (n is TypeInsnNode && n.opcode == Opcodes.NEW && n.desc != "java/lang/Object") {
+                    var k = i + 1
+                    while (k < insns.size() && insns[k] !is InsnNode) k++
+                    if (k >= insns.size()) { i++; continue }
+                    val dup = insns[k]
+                    if (dup is InsnNode && dup.opcode == Opcodes.DUP) {
+                        // localizar el <init> del constructor (saltando los argumentos)
+                        var j = k + 1
+                        var init: MethodInsnNode? = null
+                        var stop = false
+                        while (j < insns.size() && !stop) {
+                            val u = insns[j]
+                            when (u) {
+                                is MethodInsnNode -> if (u.opcode == Opcodes.INVOKESPECIAL && u.name == "<init>") { init = u; stop = true } else stop = true
+                                is TypeInsnNode -> if (u.opcode == Opcodes.NEW) stop = true
+                                is FieldInsnNode -> stop = true
+                                else -> {}
+                            }
+                            if (!stop) j++
+                        }
+                        if (init != null) {
+                            var target: String? = null
+                            var consumed = j + 1
+                            if (init.owner != n.desc) {
+                                // desajuste new/init: el tipo real es el definido dentro del jar
+                                target = realTypeOf(classes, n.desc, init.owner)
+                            }
+                            if (target == null || target == n.desc) {
+                                // escanear el consumidor del objeto creado
+                                var c = j + 1
+                                while (c < insns.size()) {
+                                    val u = insns[c]
+                                    if (u is FieldInsnNode && (u.opcode == Opcodes.PUTFIELD || u.opcode == Opcodes.PUTSTATIC)) { target = objTypeOf(u.desc); consumed = c + 1; break }
+                                    if (u is TypeInsnNode && u.opcode == Opcodes.CHECKCAST) { target = u.desc; consumed = c + 1; break }
+                                    if (u is VarInsnNode && u.opcode == Opcodes.ASTORE) { target = findStoreType(insns, u.`var`, c + 1); consumed = c + 1; break }
+                                    if (u is MethodInsnNode) break
+                                    if (u is InsnNode && u.opcode == Opcodes.POP) break
+                                    c++
+                                }
+                            }
+                            if (target != null && target != n.desc) {
+                                val targetInJar = classes.containsKey(target + ".class")
+                                val newInJar = classes.containsKey(n.desc + ".class")
+                                val assignable = isSubclassOf(classes, n.desc, target)
+                                // solo tocar bytecode que ya es inválido (el valor no es asignable al campo/uso)
+                                val fix = !assignable && (
+                                    targetInJar ||
+                                    isSubclassOf(classes, target, n.desc) ||
+                                    newInJar
+                                )
+                                if (fix) {
+                                    n.desc = target
+                                    init.owner = target
+                                    needInit.add(target to init.desc)
+                                    i = consumed
+                                }
+                            }
+                        }
+                    }
+                }
+                i++
+            }
+        }
+    }
+
+    private fun realTypeOf(classes: Map<String, ClassNode>, a: String, b: String): String? {
+        val aIn = classes.containsKey(a + ".class")
+        val bIn = classes.containsKey(b + ".class")
+        return when {
+            aIn && !bIn -> a
+            bIn && !aIn -> b
+            isSubclassOf(classes, b, a) -> b
+            isSubclassOf(classes, a, b) -> a
+            else -> null
+        }
+    }
+
+    private fun isSubclassOf(classes: Map<String, ClassNode>, sub: String, sup: String): Boolean {
+        if (sub == sup) return true
+        var cur: String? = sub
+        var depth = 0
+        while (cur != null && depth < 64) {
+            if (cur == sup) return true
+            val node = classes[cur + ".class"] ?: return false
+            if (node.interfaces.contains(sup)) return true
+            cur = node.superName
+            depth++
+        }
+        return false
     }
 
     private fun objTypeOf(desc: String): String? =
