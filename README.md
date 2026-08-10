@@ -2,9 +2,9 @@
 
 # 🚀 miwayomi
 
-**Run Tachiyomi/Aniyomi catalog extensions on a JVM — no Android needed.**
+**Run Tachiyomi/Aniyomi catalog extensions on your PC / Mac / Linux — no Android emulator, no phone.**
 
-A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the Tachiyomi/Aniyomi format** (APK) and exposes them as a **REST API + WebUI** — manga **and** anime, with HLS/DASH streaming, a manual Cloudflare bypass, and a multilingual interface.
+A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the Tachiyomi/Aniyomi format** (APK) directly on your computer and exposes them as a **REST API + WebUI** — manga **and** anime, with HLS/DASH streaming, a manual Cloudflare bypass, and a multilingual interface.
 
 <p align="center">
   <a href="https://github.com/miwayomi/miwayomi/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/miwayomi/miwayomi?color=blue&label=release"></a>
