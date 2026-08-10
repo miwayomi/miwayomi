@@ -1,141 +1,107 @@
-# miwayomi
+<div align="center">
 
-A lightweight server (Ktor, JVM 21) that runs **catalog extensions in the Tachiyomi/Aniyomi format** (APK) on a JVM without Android, exposing them as a **REST API + WebUI**.
+# 🚀 miwayomi
 
-> miwayomi is an **execution engine**: it loads extensions in the Tachiyomi/Aniyomi format and serves their sources through an API. **It does not distribute, host, or recommend any content or specific sources.** Each extension is third-party software and is responsible for what it does; miwayomi only runs them and exposes their catalog interface.
+**Run Tachiyomi/Aniyomi catalog extensions on a JVM — no Android needed.**
 
-## Documentation
+A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the Tachiyomi/Aniyomi format** (APK) and exposes them as a **REST API + WebUI** — manga **and** anime, with HLS/DASH streaming, a manual Cloudflare bypass, and a multilingual interface.
 
-Full documentation — the origin story, architecture, file-by-file code map,
-technical requirements, REST API, streaming internals, and a guide to writing
-your **own** compatible extension — lives in:
+<p align="center">
+  <a href="https://github.com/miwayomi/miwayomi/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/miwayomi/miwayomi?color=blue&label=release"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue"></a>
+  <img alt="Java" src="https://img.shields.io/badge/Java-21-orange">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2-purple">
+  <a href="https://github.com/miwayomi/miwayomi/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/miwayomi/miwayomi"></a>
+  <a href="https://github.com/miwayomi/miwayomi/forks"><img alt="GitHub forks" src="https://img.shields.io/github/forks/miwayomi/miwayomi"></a>
+  <a href="https://github.com/miwayomi/miwayomi/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/miwayomi/miwayomi"></a>
+  <a href="https://github.com/miwayomi/miwayomi/pulls"><img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/miwayomi/miwayomi"></a>
+  <a href="https://github.com/miwayomi/miwayomi/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/miwayomi/miwayomi"></a>
+</p>
 
-- **`docs/index.md`** — the complete markdown reference.
-- **`/docs.html`** — the same documentation as a web page, served by the app
-  (open the running server and click **Docs** in the top bar). It includes
-  screenshots, an animated UI tour (GIF), and a section on customizing the UI.
+> **⚠️ Legal note:** miwayomi is an **execution engine**. It does not distribute, host, or recommend any content or specific sources. Each extension is third-party software and is responsible for what it does; miwayomi only runs them and exposes their catalog interface. See the full [Legal disclaimer](#legal-disclaimer).
 
-## What it does
+</div>
 
-- Loads **APK extensions from the Tachiyomi/Aniyomi ecosystem** on the JVM (dex → jar with `dex2jar`, classes loaded with a child-first `ClassLoader`).
-- Provides a minimal Android shim (`android-compat` + `android.jar` stub) so that the `android.*`/`androidx.*` classes referenced by extensions exist without a real Android system.
-- REST API: catalog, search, details, chapters/episodes, pages, and image/video proxy with the headers each source requires.
-- WebUI (manga + anime): extension manager, source settings, and favorites.
-- Local persistence in SQLite (cookies, resolved hosts, favorites).
-- **Multilingual WebUI**: one JSON file per language in `lang/` (add a file to add a language; see `lang/README.md`).
-- Includes an offline built-in demo source (no network, no configuration) for testing the pipeline.
+---
 
-## How extensions work inside miwayomi
+## Table of contents
 
-Tachiyomi/Aniyomi extensions are **APK files** that declare their catalog classes in the manifest `meta-data` (`tachiyomi.extension.class` / `tachiyomi.animeextension.class`). miwayomi runs them like this:
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+  - [1. Desktop app (recommended)](#1-desktop-app-recommended)
+  - [2. Plain JAR (any OS)](#2-plain-jar-any-os)
+  - [3. Headless server (production / VPS)](#3-headless-server-production--vps)
+  - [Windows installer](#windows-installer)
+  - [Build from source](#build-from-source)
+- [Usage](#usage)
+  - [CLI options](#cli-options)
+  - [Auto-update](#auto-update)
+  - [Verify and shut down](#verify-and-shut-down)
+- [Cloudflare bypass](#cloudflare-bypass)
+- [REST API](#rest-api-v1)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Status & roadmap](#status--roadmap)
+- [Documentation](#documentation)
+- [Translations](#translations)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Attribution](#attribution)
+- [Legal disclaimer](#legal-disclaimer)
+- [License](#license)
 
-1. **Manifest**: `apk-parser` reads the manifest XML and extracts the declared classes.
-2. **DEX → JAR**: `dex2jar` converts `classes.dex` to a `.jar`; a post-process fixes the bytecode so it is valid on the JVM (stackmap frames, constructors, phantom classes).
-3. **Loading**: a child-first `ClassLoader` loads the classes.
-4. **Instantiation**: the source factories (`SourceFactory`/`AnimeSourceFactory`) or direct sources are instantiated and registered in the manga/anime managers.
-5. **API**: the catalog, details, chapters/episodes, pages, and video endpoints delegate to each loaded source.
+---
 
-This mechanism is **generic**: it works for any extension in that format, regardless of who distributes it or what content it handles.
+## Features
 
-## Status
-
-- ✅ `source-api` of Tachiyomi/Aniyomi (manga + anime) compiled as a JVM module.
-- ✅ `core-common` and `android-compat` adapted to JVM (includes `ContextWrapper`, `org.json`, `androidx.preference`, WebView/Handler/Looper stubs, and GraalJS).
-- ✅ Loads APK extensions (dex→jar) and exposes their sources through the REST API, with a bytecode fixer for the converted jars.
-- ✅ **Manga**: catalog, search, details, chapters, pages, and image proxy.
-- ✅ **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS (hls.js + `/hls` proxy), **DASH .mpd** (dash.js + `/dash`/`/dashseg` proxy with manifest rewriting), and direct MP4/WebM.
-- ✅ **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
-- ✅ **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP): live screenshots, clicks/keys, cookie capture (`cf_clearance`) and fast reuse. Works with any source behind Cloudflare.
-- ✅ FlareSolverr: full integration (client `/v1` + interceptor). Optional: if absent, the manual modal still appears.
-- ✅ **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites and reading progress.
-- ✅ **Source settings via API**: exposes the preferences each extension declares (language, quality, domain, etc.).
-- ✅ **Favorites and tracking**: add/remove titles and remember the last read chapter.
-- ✅ **Extension manager** in the WebUI: install/uninstall from any repository with the format index, with status and per-extension grouping.
-- ✅ Fixed: the `details` 500 when an extension returned a title without `url`, and the "No videos" caused by a double-encoded JSON body (generic interceptor).
-- ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
-
-## Structure
-
-```
-miwayomi/
-├── android-compat/   # Android shim (Context, SharedPreferences, Uri, Log, Bitmap, Base64, Html,
-│                     #   QuickJs/Duktape via GraalJS, androidx.preference stub) + android.jar stub
-├── core-common/      # Network (NetworkHelper, OkHttp helpers, interceptors), coroutines, preferences,
-│                     #   logcat, JavaScriptEngine (GraalJS), torrents stub
-├── source-api/       # Aniyomi source API ported to JVM (MangaSource/HttpSource + AnimeSource/AnimeHttpSource)
-├── server/           # Ktor app: extension loading, source managers, REST API, proxy, WebUI
-└── data/             # runtime data: data/extensions/*.apk (+ converted .jar), prefs, cache
-```
+- **Loads APK extensions from the Tachiyomi/Aniyomi ecosystem** on the JVM (dex → jar with `dex2jar`, classes loaded with a child-first `ClassLoader`).
+- **Manga**: catalog, search, details, chapters, pages, and image proxy.
+- **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS (hls.js + `/hls` proxy), **DASH .mpd** (dash.js + `/dash`/`/dashseg` proxy with manifest rewriting), and direct MP4/WebM.
+- **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
+- **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP): live screenshots, clicks/keys, cookie capture (`cf_clearance`) and fast reuse.
+- **FlareSolverr** integration (client `/v1` + interceptor), optional.
+- **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites and reading progress.
+- **Source settings via API**: exposes the preferences each extension declares (language, quality, domain, ...).
+- **Extension manager** in the WebUI: install/uninstall from any repository, with status and per-extension grouping.
+- **Multilingual WebUI**: one JSON file per language in `lang/` (add a file to add a language).
+- Offline built-in demo source (no network, no configuration) for testing the pipeline.
 
 ## Requirements
 
-- JDK 21 (Temurin recommended). Gradle downloads itself (wrapper).
-- To solve Cloudflare challenges manually you need Chrome/Chromium
-  (the one bundled with FlareSolverr in `flaresolverr/`, or `--chrome <path>`).
+- **JDK 21** (Temurin recommended). Gradle downloads itself via the wrapper.
+- Chrome/Chromium — only if you want the **manual Cloudflare bypass** (the one bundled with FlareSolverr in `flaresolverr/`, or `--chrome <path>`).
 
-## Running
+## Installation
 
-miwayomi runs in three ways, from "just works" to "proper server".
+### 1. Desktop app (recommended)
 
-### 1. Desktop app — one command, one window (macOS / Linux / Windows)
-
-`./miwayomi` and `miwayomi.bat` start everything with a single command: they
-pick a **free port**, start the server with all defaults, open a **dedicated
-app window** (Chrome/Edge/Chromium `--app` — no tabs or URL bar) and stop when
-you close the window.
+`./miwayomi` and `miwayomi.bat` start everything with a single command: they pick a **free port**, start the server with all defaults, open a **dedicated app window** (Chrome/Edge/Chromium `--app` — no tabs or URL bar) and stop when you close the window.
 
 ```bash
 ./miwayomi      # macOS / Linux (run or double-click)
 miwayomi.bat    # Windows (double-click)
 ```
 
-On Windows you can also install it properly with the **installer** (below).
+### 2. Plain JAR (any OS)
 
-### 2. Plain JAR (any OS) — just works
-
-Download the cross-platform JAR from the
-[Releases](https://github.com/miwayomi/miwayomi/releases) page (you only need
-**JDK 21**) and run it — the port is optional (it picks a free one) and it
-opens your default browser with the real URL:
+Download the cross-platform JAR from the [Releases](https://github.com/miwayomi/miwayomi/releases) page (you only need **JDK 21**) and run it — the port is optional (it picks a free one) and it opens your default browser with the real URL:
 
 ```bash
 java -jar miwayomi-all.jar
 ```
 
-Force a specific port with `--port 4567`; use `--no-open` for headless/server
-use. To build the JAR locally: `./gradlew :server:shadowJar`.
+Force a specific port with `--port 4567`; use `--no-open` for headless/server use.
 
 ### 3. Headless server (production / VPS)
 
 ```bash
-cd /home/asking/Escritorio/miwayomi
+cd miwayomi
 ./gradlew :server:installDist && ./gradlew --stop
-./start.sh       # uses the installed distribution, headless, logs in /tmp
+./start.sh       # headless, logs in /tmp
 ```
 
-The JVM runs with a small heap + `SerialGC` (`-Xmx512m -Xms64m
--XX:MaxMetaspaceSize=256m -XX:+UseSerialGC`, ~160–170 MB RSS at rest). Tune RAM
-with `MIWAYOMI_MEM="-Xmx768m" ./start.sh`. Dev mode (no install):
-`./gradlew :server:run --args="--data ./data --port 4567"`.
-
-### CLI options
-
-| Flag | Default | Meaning |
-| ---- | ------- | ------- |
-| `--port`, `-p` | auto | Listen port; omit for an automatic free port. |
-| `--host`, `-h` | `0.0.0.0` | Listen address. |
-| `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
-| `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
-| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
-| `--no-open` | off | Do not open a browser on start (headless). |
-
-### Auto-update
-
-On startup the server checks GitHub for a newer release. If one exists it
-**downloads the new JAR** automatically and the WebUI shows a banner
-("New version vX.Y.Z available — close and relaunch to apply"). The next launch
-applies it (the previous JAR is kept as `miwayomi-all.jar.bak`). Status:
-`GET /api/v1/update`.
+The JVM runs with a small heap + `SerialGC` (`-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC`, ~160–170 MB RSS at rest). Tune RAM with `MIWAYOMI_MEM="-Xmx768m" ./start.sh`. Dev mode (no install): `./gradlew :server:run --args="--data ./data --port 4567"`.
 
 ### Windows installer
 
@@ -152,29 +118,46 @@ yay -S nsis             # Arch / EndeavourOS (the nsis package is in the AUR)
 # → packaging/dist/miwayomi-setup-0.2.0.exe
 ```
 
-The installer bundles the JAR + launcher and creates Start Menu / desktop
-shortcuts. To make it fully standalone (bundles a JRE so the target PC does not
-need Java installed), pass a Windows JDK zip:
+The installer bundles the JAR + launcher and creates Start Menu / desktop shortcuts. To make it fully standalone (bundles a JRE so the target PC does not need Java installed), pass a Windows JDK zip:
 
 ```bash
 JRE_ZIP=temurin-21-jdk_windows-x64_bin.zip ./packaging/build-installer.sh 0.2.0
 ```
 
-**B) Automatically on every release** via GitHub Actions
-(`.github/workflows/build-installer.yml`): on a tag `v*`, a `windows-latest`
-runner (WiX pre-installed) builds `miwayomi-<version>.exe` with `jpackage` and
-attaches it to the release. The installed app opens the dedicated app window
-(Edge/Chrome `--app`) and stops when the window is closed.
+**B) Automatically on every release** via GitHub Actions (`.github/workflows/build-installer.yml`): on a tag `v*`, a `windows-latest` runner (WiX pre-installed) builds `miwayomi-<version>.exe` with `jpackage` and attaches it to the release. The installed app opens the dedicated app window (Edge/Chrome `--app`) and stops when the window is closed.
 
-### Verify
+### Build from source
+
+```bash
+git clone https://github.com/miwayomi/miwayomi.git
+cd miwayomi
+./gradlew :server:shadowJar     # builds the fat JAR (server/build/libs/miwayomi-all.jar)
+```
+
+## Usage
+
+### CLI options
+
+| Flag | Default | Meaning |
+| ---- | ------- | ------- |
+| `--port`, `-p` | auto | Listen port; omit for an automatic free port. |
+| `--host`, `-h` | `0.0.0.0` | Listen address. |
+| `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
+| `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
+| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
+| `--no-open` | off | Do not open a browser on start (headless). |
+
+### Auto-update
+
+On startup the server checks GitHub for a newer release. If one exists it **downloads the new JAR** automatically and the WebUI shows a banner ("New version vX.Y.Z available — close and relaunch to apply"). The next launch applies it (the previous JAR is kept as `miwayomi-all.jar.bak`). Status: `GET /api/v1/update`.
+
+### Verify and shut down
 
 ```bash
 curl http://localhost:4567/api/v1/health   # {"status":"ok",...}
 ```
 
 Open `http://localhost:4567` (WebUI).
-
-### Shut down
 
 ```bash
 pkill -f "miwayomi-all.jar"     # or close the app window / stop the launcher
@@ -185,14 +168,10 @@ pkill -f "flaresolverr.py"      # optional FlareSolverr
 
 Some sources are behind the Cloudflare anti-bot. miwayomi has **two ways** to unlock them:
 
-1. **Manual resolution (recommended, always works)**: the WebUI opens a modal with the live challenge;
-   you solve the captcha by hand and miwayomi captures the cookies. Requires Chrome/Chromium
-   (the one bundled with FlareSolverr, or `--chrome <path>`).
-2. **FlareSolverr (optional)**: tries to solve the challenge automatically with a headless browser.
-   If it is not configured or fails to solve, the manual way is used.
+1. **Manual resolution (recommended, always works)**: the WebUI opens a modal with the live challenge; you solve the captcha by hand and miwayomi captures the cookies. Requires Chrome/Chromium (the one bundled with FlareSolverr, or `--chrome <path>`).
+2. **FlareSolverr (optional)**: tries to solve the challenge automatically with a headless browser. If it is not configured or fails to solve, the manual way is used.
 
-> Chrome for the modal: miwayomi looks for Chrome in `CHROME_PATH`, `--chrome <path>`, or the usual
-> locations (`/tmp/flaresolverr/_internal/chrome/chrome`, `google-chrome`, `chromium`).
+> Chrome for the modal: miwayomi looks for Chrome in `CHROME_PATH`, `--chrome <path>`, or the usual locations (`/tmp/flaresolverr/_internal/chrome/chrome`, `google-chrome`, `chromium`).
 
 ### 1. (Optional) Run FlareSolverr — option A: Docker
 
@@ -202,8 +181,7 @@ docker run -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
 
 ### 1'. (Optional) Run FlareSolverr — option B: binary, no Docker
 
-Download the binary from the latest release (`flaresolverr_linux_x64.tar.gz`) and run it.
-On Linux it needs `xvfb`:
+Download the binary from the latest release (`flaresolverr_linux_x64.tar.gz`) and run it. On Linux it needs `xvfb`:
 
 ```bash
 sudo pacman -S --noconfirm xorg-xvfb        # Arch / EndeavourOS
@@ -212,13 +190,11 @@ sudo pacman -S --noconfirm xorg-xvfb        # Arch / EndeavourOS
 cd /tmp/flaresolverr && ./flaresolverr --port 8191
 ```
 
-> Note: if you use the binary and `/bin/sh` fails with `rl_trim_arg_from_keyseq`, move the
-> `libreadline.so.8` shipped in the bundle out of the way (`mv _internal/libreadline.so.8 _internal/libreadline.so.8.bak`).
+> Note: if you use the binary and `/bin/sh` fails with `rl_trim_arg_from_keyseq`, move the `libreadline.so.8` shipped in the bundle out of the way (`mv _internal/libreadline.so.8 _internal/libreadline.so.8.bak`).
 
 ### 1''. Run FlareSolverr (option C: from source, WITHOUT Xvfb or sudo)
 
-If you have neither `sudo` nor `docker`, you can run FlareSolverr from its source using
-Chrome in real headless mode (`--headless=new`, no display required):
+If you have neither `sudo` nor `docker`, you can run FlareSolverr from its source using Chrome in real headless mode (`--headless=new`, no display required):
 
 ```bash
 # 1. Download the FlareSolverr binary (ships Chrome 142 in _internal/chrome)
@@ -251,19 +227,11 @@ How it works internally:
 
 1. `CloudflareInterceptor` detects a challenge (code 403/429/503 + Cloudflare headers or a "Just a moment" body).
 2. If FlareSolverr is configured, it tries to solve it automatically (with a ~20 s limit).
-3. If it fails (or there is no FlareSolverr), it returns `challengeUrl` in the error and the WebUI opens a **manual resolution modal**:
-   the server launches its own headless Chrome (CDP), shows live screenshots, forwards your
-   clicks/keys, and when you press "I've solved it" it **captures the cookies** (including HttpOnly ones
-   like `cf_clearance`) and stores them in the cookie jar. From then on, requests pass without a challenge.
+3. If it fails (or there is no FlareSolverr), it returns `challengeUrl` in the error and the WebUI opens a **manual resolution modal**: the server launches its own headless Chrome (CDP), shows live screenshots, forwards your clicks/keys, and when you press "I've solved it" it **captures the cookies** (including HttpOnly ones like `cf_clearance`) and stores them in the cookie jar. From then on, requests pass without a challenge.
 
-> **Key detail**: Cloudflare binds `cf_clearance` to the User-Agent that solved the challenge. That is why the
-> browser solves with the Chrome UA and, after saving the cookies, the server forces that same UA
-> on requests to that host (`CfResolvedUa`) so they pass without being re-challenged.
+> **Key detail**: Cloudflare binds `cf_clearance` to the User-Agent that solved the challenge. That is why the browser solves with the Chrome UA and, after saving the cookies, the server forces that same UA on requests to that host (`CfResolvedUa`) so they pass without being re-challenged.
 
-> **Known limitations**: some Cloudflare challenges (Turnstile/interactive captcha) do not
-> auto-solve in headless Chrome; the manual modal solves them. Some extensions ship their own
-> interceptor that creates a WebView to solve the challenge; with the no-op stub that flow can
-> be slow/hang — the reliable path is the manual modal (which uses the real browser).
+> **Known limitations**: some Cloudflare challenges (Turnstile/interactive captcha) do not auto-solve in headless Chrome; the manual modal solves them. Some extensions ship their own interceptor that creates a WebView to solve the challenge; with the no-op stub that flow can be slow/hang — the reliable path is the manual modal (which uses the real browser).
 
 ## REST API (v1)
 
@@ -290,36 +258,79 @@ How it works internally:
 | `GET /api/v1/favorites` · `POST /api/v1/favorites` · `DELETE /api/v1/favorites?sourceId=&url=` | Favorites |
 | `GET /api/v1/favorites/check?sourceId=&url=` · `POST /api/v1/favorites/progress` | Favorite status and reading progress |
 
-## How it works (architecture summary)
+## How it works
+
+**How extensions run inside miwayomi**
+
+Tachiyomi/Aniyomi extensions are **APK files** that declare their catalog classes in the manifest `meta-data` (`tachiyomi.extension.class` / `tachiyomi.animeextension.class`). miwayomi runs them like this:
+
+1. **Manifest**: `apk-parser` reads the manifest XML and extracts the declared classes.
+2. **DEX → JAR**: `dex2jar` converts `classes.dex` to a `.jar`; a post-process fixes the bytecode so it is valid on the JVM (stackmap frames, constructors, phantom classes).
+3. **Loading**: a child-first `ClassLoader` loads the classes.
+4. **Instantiation**: the source factories (`SourceFactory`/`AnimeSourceFactory`) or direct sources are instantiated and registered in the manga/anime managers.
+5. **API**: the catalog, details, chapters/episodes, pages, and video endpoints delegate to each loaded source.
+
+This mechanism is **generic**: it works for any extension in that format, regardless of who distributes it or what content it handles.
+
+**Architecture summary**
 
 1. **AndroidCompat**: extensions reference `android.*` and `androidx.preference.*` classes. `android-compat` implements the ones that matter (SharedPreferences, Uri, Log, Context...) and an `android.jar` stub (API 30) covers the rest. A GraalJS engine replaces QuickJS/Duktape for anime extractors.
 2. **source-api ported to JVM**: the source API module (originally an Android target) is adapted as pure JVM, replacing the Android `expect`s with real classes.
 3. **Extension loading**: `dex2jar` converts the APK to a jar, a post-process fixes the bytecode for JVM, `ChildFirstURLClassLoader` loads it, and `SourceFactory`/`AnimeSourceFactory` instantiate the sources, which are registered in the managers.
 4. **Server**: Ktor + REST endpoints + proxy with the headers the source requires (Referer/UA).
 
-## Notes and known limitations
+## Project structure
 
-- Some **anime** sources depend on WebView/native JS to extract the video; GraalJS covers the `JavaScriptEngine`/QuickJs/Duktape API, but the ones using a real WebView need a headless browser.
-- The streaming proxy works in chunks (without loading the whole file into RAM) and rewrites the HLS/DASH manifests for playback.
-- Torrent streaming (native Android) is not supported (stub that throws "disabled").
-- An extension may fail to load if its APK bundles libraries that collide with the runtime ones, or if its bytecode has patterns the fixer does not cover; in that case the error is reported and the rest keeps working.
+```
+miwayomi/
+├── android-compat/   # Android shim (Context, SharedPreferences, Uri, Log, Bitmap, Base64, Html,
+│                     #   QuickJs/Duktape via GraalJS, androidx.preference stub) + android.jar stub
+├── core-common/      # Network (NetworkHelper, OkHttp helpers, interceptors), coroutines, preferences,
+│                     #   logcat, JavaScriptEngine (GraalJS), torrents stub
+├── source-api/       # Aniyomi source API ported to JVM (MangaSource/HttpSource + AnimeSource/AnimeHttpSource)
+├── server/           # Ktor app: extension loading, source managers, REST API, proxy, WebUI
+└── data/             # runtime data: data/extensions/*.apk (+ converted .jar), prefs, cache
+```
+
+## Status & roadmap
+
+- ✅ `source-api` of Tachiyomi/Aniyomi (manga + anime) compiled as a JVM module.
+- ✅ `core-common` and `android-compat` adapted to JVM (includes `ContextWrapper`, `org.json`, `androidx.preference`, WebView/Handler/Looper stubs, and GraalJS).
+- ✅ Loads APK extensions (dex→jar) and exposes their sources through the REST API, with a bytecode fixer for the converted jars.
+- ✅ **Manga**: catalog, search, details, chapters, pages, and image proxy.
+- ✅ **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS, DASH .mpd, and direct MP4/WebM.
+- ✅ **Chunked streaming** and **full MIME support**.
+- ✅ **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP).
+- ✅ **FlareSolverr** integration, optional.
+- ✅ **SQLite persistence**: Cloudflare cookies, resolved hosts, favorites, and reading progress.
+- ✅ **Source settings via API**.
+- ✅ **Favorites and tracking**: add/remove titles and remember the last read chapter.
+- ✅ **Extension manager** in the WebUI.
+- ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
+- ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
+
+## Documentation
+
+Full documentation — the origin story, architecture, file-by-file code map, technical requirements, REST API, streaming internals, and a guide to writing your **own** compatible extension — lives in:
+
+- **`docs/index.md`** — the complete markdown reference.
+- **`/docs.html`** — the same documentation as a web page, served by the app (open the running server and click **Docs** in the top bar). It includes screenshots, an animated UI tour (GIF), and a section on customizing the UI.
 
 ## Translations
 
-The WebUI is translated with one JSON file per language in `server/src/main/resources/webui/lang/`
-(`en.json`, `es.json`, ...). To add a language, copy `en.json` to `<code>.json`, translate the values,
-register it in the `<select id="langSelect">` of `index.html`, and rebuild. See `lang/README.md`.
+The WebUI is translated with one JSON file per language in `server/src/main/resources/webui/lang/` (`en.json`, `es.json`, ...). To add a language, copy `en.json` to `<code>.json`, translate the values, register it in the `<select id="langSelect">` of `index.html`, and rebuild. See `lang/README.md`.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide (dev setup, conventions, and the pull request checklist). By contributing, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md) and the project's rules on attribution, disclaimers, and third-party rights (see the [Legal disclaimer](#legal-disclaimer)). Do not submit or redistribute content or extensions you do not own.
+
+## Security
+
+Found a security issue? Please report it **privately** — see [SECURITY.md](SECURITY.md) for the supported versions and the reporting process. Do **not** open a public issue for vulnerabilities.
 
 ## Attribution
 
 See [NOTICE-ANIYOMI.md](NOTICE-ANIYOMI.md): `source-api` and `core-common` are adaptations of Aniyomi (Apache-2.0). The rest is new miwayomi code.
-
-## Contributing
-
-Contributions are welcome. By contributing, you agree to follow the
-[Code of Conduct](CODE_OF_CONDUCT.md) and the project's rules on attribution,
-disclaimers, and third-party rights (see the [Legal disclaimer](#legal-disclaimer)).
-Do not submit or redistribute content or extensions you do not own.
 
 ## Legal disclaimer
 
@@ -345,9 +356,6 @@ miwayomi is an **execution engine**, not a content service. Please read this car
 
 ## License
 
-miwayomi is licensed under the **Apache License, Version 2.0**. See
-[`LICENSE`](LICENSE) for the full license text.
+miwayomi is licensed under the **Apache License, Version 2.0**. See [`LICENSE`](LICENSE) for the full license text.
 
-Portions of the codebase are adapted from
-[Aniyomi](https://github.com/aniyomiorg/aniyomi) (Apache-2.0); see
-[`NOTICE-ANIYOMI.md`](NOTICE-ANIYOMI.md) for attribution.
+Portions of the codebase are adapted from [Aniyomi](https://github.com/aniyomiorg/aniyomi) (Apache-2.0); see [`NOTICE-ANIYOMI.md`](NOTICE-ANIYOMI.md) for attribution.
