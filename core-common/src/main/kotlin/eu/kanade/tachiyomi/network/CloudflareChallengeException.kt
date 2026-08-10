@@ -6,4 +6,4 @@ class CloudflareChallengeException(
     val url: String,
     val userAgent: String? = null,
     cause: Throwable? = null,
-) : IOException("Reto de Cloudflare pendiente en $url", cause)
+) : IOException("Pending Cloudflare challenge at $url", cause)

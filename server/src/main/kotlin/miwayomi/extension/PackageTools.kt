@@ -65,7 +65,7 @@ object PackageTools {
                 )
             }
         } catch (e: Exception) {
-            System.err.println("Error leyendo manifest de $apk: $e")
+            System.err.println("Error reading manifest of $apk: $e")
             null
         }
     }
@@ -85,7 +85,7 @@ object PackageTools {
             .to(jarFile.toPath())
 
         if (handler.hasException()) {
-            System.err.println("dex2jar terminó con errores para $apk (algunas clases pueden faltar)")
+            System.err.println("dex2jar finished with errors for $apk (some classes may be missing)")
         }
     }
 

@@ -57,7 +57,7 @@ class ExtensionManager(
     fun loadAll(): Int {
         val dir = CompatRuntime.baseDir.resolve("extensions")
         if (!dir.exists()) {
-            println("[miwayomi] No existe $dir, creando...")
+            println("[miwayomi] $dir does not exist, creating...")
             dir.mkdirs()
             return 0
         }
@@ -71,12 +71,12 @@ class ExtensionManager(
                 load(apk)
                 ok++
             } catch (e: Throwable) {
-                System.err.println("[miwayomi] Error cargando $apk: ${e}")
+                System.err.println("[miwayomi] Error loading $apk: ${e}")
                 e.printStackTrace()
             }
         }
 
-        // Extensiones compiladas desde fuente (sin APK): jars con marcador
+        // Extensions compiled from source (no APK): jars with a marker
         val jars = dir.listFiles { f ->
             f.isFile && f.extension.equals("jar", ignoreCase = true) && hasSourceJarMarker(f)
         }?.sortedBy { it.name }.orEmpty()
@@ -85,7 +85,7 @@ class ExtensionManager(
                 loadSourceJar(jar)
                 ok++
             } catch (e: Throwable) {
-                System.err.println("[miwayomi] Error cargando jar de fuente $jar: ${e}")
+                System.err.println("[miwayomi] Error loading source jar $jar: ${e}")
                 e.printStackTrace()
             }
         }
@@ -105,17 +105,17 @@ class ExtensionManager(
             Json { ignoreUnknownKeys = true }.decodeFromString<SourceJarMeta>(text)
         }
     } catch (e: Exception) {
-        System.err.println("[miwayomi] Marcador inválido en $jar: $e")
+        System.err.println("[miwayomi] Invalid marker in $jar: $e")
         null
     }
 
     /**
-     * Carga una extensión compilada desde fuente (Kotlin -> JVM), sin dex2jar.
-     * El jar debe contener META-INF/miwayomi-extension.json con el metadata.
+     * Loads an extension compiled from source (Kotlin -> JVM), without dex2jar.
+     * The jar must contain META-INF/miwayomi-extension.json with the metadata.
      */
     fun loadSourceJar(jar: File): LoadedExtension {
         val meta = readSourceJarMeta(jar)
-            ?: throw IllegalStateException("Sin marcador miwayomi en $jar")
+            ?: throw IllegalStateException("No miwayomi marker in $jar")
         val extMeta = ExtensionMeta(
             pkgName = meta.pkgName,
             versionName = meta.versionName,
@@ -144,24 +144,24 @@ class ExtensionManager(
                     else -> instances.add(instance)
                 }
             } catch (e: Throwable) {
-                System.err.println("[miwayomi] Error instanciando $className en $jar: ${e}")
+                System.err.println("[miwayomi] Error instantiating $className in $jar: ${e}")
                 e.printStackTrace(System.err)
             }
         }
 
         val loaded = registerInstances(extMeta, apk = jar, jar = jar, classLoader = classLoader, instances = instances)
         extensions[extMeta.pkgName] = loaded
-        println("[miwayomi] Extensión (fuente) cargada: ${extMeta.name} (${extMeta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
+        println("[miwayomi] Extension (source) loaded: ${extMeta.name} (${extMeta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
         return loaded
     }
 
     fun load(apk: File): LoadedExtension {
         val meta = PackageTools.parseMeta(apk)
-            ?: throw IllegalStateException("No se pudo leer el manifest de $apk")
+            ?: throw IllegalStateException("Could not read manifest of $apk")
 
         val jar = File(apk.parentFile, apk.nameWithoutExtension + ".jar")
         if (!jar.exists() || jar.lastModified() < apk.lastModified()) {
-            println("[miwayomi] convirtiendo ${apk.name} (dex -> jar)...")
+            println("[miwayomi] converting ${apk.name} (dex -> jar)...")
             PackageTools.dex2jar(apk, jar)
 
             JarFixer.fixStackmapFrames(jar)
@@ -186,12 +186,12 @@ class ExtensionManager(
                     else -> instances.add(instance)
                 }
             } catch (e: Throwable) {
-                System.err.println("[miwayomi] Error instanciando $fqcn: ${e}")
+                System.err.println("[miwayomi] Error instantiating $fqcn: ${e}")
 
                 var cause = e
                 while (cause is java.lang.reflect.InvocationTargetException && cause.cause != null) {
                     cause = cause.cause!!
-                    System.err.println("[miwayomi]   causa: ${cause}")
+                    System.err.println("[miwayomi]   cause: ${cause}")
                 }
                 e.printStackTrace(System.err)
             }
@@ -209,13 +209,13 @@ class ExtensionManager(
                     else -> instances.add(instance)
                 }
             } catch (e: Throwable) {
-                System.err.println("[miwayomi] Error en factory $fqcn: ${e}")
+                System.err.println("[miwayomi] Error in factory $fqcn: ${e}")
             }
         }
 
         val loaded = registerInstances(meta, apk, jar, classLoader, instances)
         extensions[meta.pkgName] = loaded
-        println("[miwayomi] Extensión cargada: ${meta.name} (${meta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
+        println("[miwayomi] Extension loaded: ${meta.name} (${meta.pkgName}) - manga: ${loaded.manga}, anime: ${loaded.anime}")
         return loaded
     }
 
@@ -267,7 +267,7 @@ class ExtensionManager(
         runCatching { ext.classLoader.close() }
         runCatching { ext.apk.delete() }
         runCatching { ext.jar.delete() }
-        println("[miwayomi] Extensión desinstalada: ${ext.meta.name} (${ext.meta.pkgName})")
+        println("[miwayomi] Extension uninstalled: ${ext.meta.name} (${ext.meta.pkgName})")
         return ext
     }
 }

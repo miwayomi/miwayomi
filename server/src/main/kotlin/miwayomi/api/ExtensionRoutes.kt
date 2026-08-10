@@ -90,7 +90,7 @@ fun Application.registerExtensionApi() {
             if (!response.isSuccessful) {
                 val code = response.code
                 response.close()
-                return@get call.respond(HttpStatusCode.BadGateway, ErrorDto("error al leer el repo ($code)"))
+                return@get call.respond(HttpStatusCode.BadGateway, ErrorDto("error reading repo ($code)"))
             }
             val bytes = response.body.bytes()
             response.close()
@@ -129,7 +129,7 @@ fun Application.registerExtensionApi() {
                     }
                 }
             } catch (e: Exception) {
-                return@get call.respond(HttpStatusCode.BadGateway, ErrorDto("índice inválido: ${e.message}"))
+                return@get call.respond(HttpStatusCode.BadGateway, ErrorDto("invalid index: ${e.message}"))
             }
 
             call.respond(RepoListDto(repo, entries.size, entries.count { it.installed }, entries))
@@ -147,7 +147,7 @@ fun Application.registerExtensionApi() {
             }
             val destName = url.substringAfterLast('/')
             if (!destName.endsWith(".apk", ignoreCase = true)) {
-                return@post call.respond(HttpStatusCode.BadRequest, InstallResultDto(ok = false, error = "nombre de apk inválido"))
+                return@post call.respond(HttpStatusCode.BadRequest, InstallResultDto(ok = false, error = "invalid apk name"))
             }
 
             val client = Injekt.get<NetworkHelper>().client
@@ -155,7 +155,7 @@ fun Application.registerExtensionApi() {
             if (!response.isSuccessful) {
                 val code = response.code
                 response.close()
-                return@post call.respond(HttpStatusCode.BadGateway, InstallResultDto(ok = false, error = "descarga fallida ($code)"))
+                return@post call.respond(HttpStatusCode.BadGateway, InstallResultDto(ok = false, error = "download failed ($code)"))
             }
             val bytes = response.body.bytes()
             response.close()
@@ -173,7 +173,7 @@ fun Application.registerExtensionApi() {
                 extensionManager.load(dest)
             } catch (e: Throwable) {
                 val root = generateSequence(e) { it.cause }.lastOrNull() ?: e
-                return@post call.respond(HttpStatusCode.InternalServerError, InstallResultDto(ok = false, error = root.message ?: e.message ?: "error al cargar"))
+                return@post call.respond(HttpStatusCode.InternalServerError, InstallResultDto(ok = false, error = root.message ?: e.message ?: "error loading"))
             }
 
             call.respond(
@@ -191,11 +191,11 @@ fun Application.registerExtensionApi() {
             val req = call.receive<UninstallRequestDto>()
             val pkg = req.pkg.trim()
             if (pkg.isEmpty()) {
-                return@post call.respond(HttpStatusCode.BadRequest, UninstallResultDto(ok = false, error = "pkg vacío"))
+                return@post call.respond(HttpStatusCode.BadRequest, UninstallResultDto(ok = false, error = "empty pkg"))
             }
             val removed = extensionManager.uninstall(pkg)
             if (removed == null) {
-                return@post call.respond(HttpStatusCode.NotFound, UninstallResultDto(ok = false, error = "extensión no instalada"))
+                return@post call.respond(HttpStatusCode.NotFound, UninstallResultDto(ok = false, error = "extension not installed"))
             }
             call.respond(UninstallResultDto(ok = true, name = removed.meta.name, pkg = pkg))
         }

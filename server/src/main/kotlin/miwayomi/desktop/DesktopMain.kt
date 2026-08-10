@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
     server.start(wait = false)
 
     val url = "http://127.0.0.1:${config.port}/"
-    println("[miwayomi] ventana propia -> $url")
+    println("[miwayomi] app window -> $url")
 
     val proc: Process? = findBrowser()?.let { browser ->
         val profile = File(System.getProperty("user.home"), ".cache/miwayomi-app")

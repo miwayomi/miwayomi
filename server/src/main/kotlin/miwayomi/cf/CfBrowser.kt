@@ -48,7 +48,7 @@ class CfBrowser(
             "/usr/bin/chromium", "/usr/bin/chromium-browser",
         )
         return candidates.firstOrNull { File(it).canExecute() }
-            ?: error("No se encontró Chrome/Chromium. Usa --chrome <ruta> o CHROME_PATH.")
+            ?: error("Chrome/Chromium not found. Use --chrome <path> or CHROME_PATH.")
     }
 
     @Synchronized
@@ -91,7 +91,7 @@ class CfBrowser(
         if (!ok) {
             process?.destroyForcibly()
             process = null
-            throw RuntimeException("Chrome no arrancó (¿puerto $debugPort ocupado?). Revisa ${logFile.absolutePath}")
+            throw RuntimeException("Chrome did not start (port $debugPort in use?). Check ${logFile.absolutePath}")
         }
     }
 
@@ -119,7 +119,7 @@ class CfBrowser(
     fun screenshot(): ByteArray {
         val res = cdp.command("Page.captureScreenshot", buildJsonObject { put("format", "png") })
         val data = res["result"]?.jsonObject?.get("data")?.jsonPrimitive?.contentOrNull
-            ?: throw RuntimeException("No se pudo capturar pantalla")
+            ?: throw RuntimeException("Could not capture screenshot")
         return Base64.getDecoder().decode(data)
     }
 

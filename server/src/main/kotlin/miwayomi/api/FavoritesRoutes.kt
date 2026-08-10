@@ -74,16 +74,16 @@ fun Application.registerFavoritesApi() {
             val sourceId = call.request.queryParameters["sourceId"]
             val url = call.request.queryParameters["url"]
             if (sourceId.isNullOrBlank() || url.isNullOrBlank()) {
-                return@get call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId y url requeridos"))
+                return@get call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId and url are required"))
             }
             call.respond(FavoriteResultDto(ok = store.favoriteGet(sourceId, url) != null))
         }
 
         post("/api/v1/favorites") {
             val req = runCatching { call.receive<FavoriteReqDto>() }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "cuerpo inválido"))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "invalid body"))
             if (req.sourceId.isBlank() || req.url.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId y url requeridos"))
+                return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId and url are required"))
             }
             store.favoriteUpsert(
                 Favorite(
@@ -102,7 +102,7 @@ fun Application.registerFavoritesApi() {
             val sourceId = call.request.queryParameters["sourceId"]
             val url = call.request.queryParameters["url"]
             if (sourceId.isNullOrBlank() || url.isNullOrBlank()) {
-                return@delete call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId y url requeridos"))
+                return@delete call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "sourceId and url are required"))
             }
             store.favoriteDelete(sourceId, url)
             call.respond(FavoriteResultDto(true))
@@ -110,7 +110,7 @@ fun Application.registerFavoritesApi() {
 
         post("/api/v1/favorites/progress") {
             val req = runCatching { call.receive<ProgressReqDto>() }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "cuerpo inválido"))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, FavoriteResultDto(false, "invalid body"))
             store.favoriteSetProgress(req.sourceId, req.url, req.lastReadUrl, req.lastReadName)
             call.respond(FavoriteResultDto(true))
         }

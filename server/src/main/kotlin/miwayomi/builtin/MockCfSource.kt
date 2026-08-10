@@ -28,7 +28,7 @@ class MockCfSource : HttpSource() {
                 listOf(
                     SManga.create().apply {
                         url = "/m/1"
-                        title = if (body.contains("SOLUCIONADO")) "OK: reto superado" else "FALLO: ${body.take(120)}"
+                        title = if (body.contains("SOLUCIONADO")) "OK: challenge solved" else "FAIL: ${body.take(120)}"
                     },
                 ),
                 false,

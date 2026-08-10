@@ -30,12 +30,12 @@ fun buildServer(config: ServerConfig): EmbeddedServer<*, *> {
     UpdateManager.start()
 
     if (config.flareSolverrUrl != null) {
-        println("[miwayomi] FlareSolverr habilitado en ${config.flareSolverrUrl}")
+        println("[miwayomi] FlareSolverr enabled at ${config.flareSolverrUrl}")
     }
 
     val extensionManager = Injekt.get<ExtensionManager>()
     val loaded = extensionManager.loadAll()
-    println("[miwayomi] $loaded extensión(es) cargada(s)")
+    println("[miwayomi] $loaded extension(s) loaded")
 
     Injekt.get<MangaSourceManager>().register(DemoSource())
     Injekt.get<MangaSourceManager>().register(MockCfSource())
@@ -52,7 +52,7 @@ fun openBrowser(port: Int) {
         if (!desktop.isSupported(Desktop.Action.BROWSE)) return
         desktop.browse(URI("http://127.0.0.1:$port/"))
     } catch (e: Exception) {
-        // headless or sin navegador: se ignora, la URL se imprime igualmente
+        // headless or no browser: ignore, the URL is still printed
     }
 }
 
@@ -62,8 +62,8 @@ fun main(args: Array<String>) {
 
     println("""
         |
-        |  miwayomi corriendo en http://${config.host}:${config.port}
-        |  datos en: ${config.dataDir.absolutePath}
+        |  miwayomi running at http://${config.host}:${config.port}
+        |  data in: ${config.dataDir.absolutePath}
         |  API:      http://${config.host}:${config.port}/api/v1
         |  WebUI:    http://${config.host}:${config.port}/
         |

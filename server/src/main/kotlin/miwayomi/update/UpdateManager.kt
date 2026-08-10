@@ -44,7 +44,7 @@ object UpdateManager {
                 if (info.downloaded) state.set(info)
             }
         } catch (e: Exception) {
-            // guardado corrupto: se ignora
+            // corrupted save: ignore
         }
     }
 
@@ -79,10 +79,10 @@ object UpdateManager {
                 f.parentFile?.mkdirs()
                 f.writeText(json.encodeToString(UpdateInfo.serializer(), state.get()))
             } catch (e: Exception) {
-                // no crítico
+                // not critical
             }
         } catch (e: Exception) {
-            // sin red / API caída: se deja el estado por defecto
+            // no network / API down: keep the default state
         }
     }
 

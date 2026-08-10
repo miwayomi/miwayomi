@@ -1,46 +1,46 @@
 #!/usr/bin/env bash
-# miwayomi — launcher con ventana propia (modo app, Chrome/Edge/Chromium)
+# miwayomi — launcher with its own window (app mode, Chrome/Edge/Chromium)
 #
-# 1. Aplica una actualización pendiente si existe (data/update/*.jar.new).
-# 2. Elige un puerto libre, arranca el servidor con todos los parámetros.
-# 3. Abre una ventana propia tipo app (sin pestañas ni barra de URL).
-# 4. Al cerrar la ventana, detiene el servidor.
-# Los argumentos extra se reenvían al jar (--data, --flaresolverr, ...).
+# 1. Applies a pending update if one exists (data/update/*.jar.new).
+# 2. Picks a free port, starts the server with all parameters.
+# 3. Opens its own app-like window (no tabs or URL bar).
+# 4. When the window is closed, stops the server.
+# Extra arguments are forwarded to the jar (--data, --flaresolverr, ...).
 set -e
 cd "$(dirname "$0")"
 
 JAR="miwayomi-all.jar"
 [ -f "$JAR" ] || JAR="server/build/libs/miwayomi-all.jar"
 if [ ! -f "$JAR" ]; then
-  echo "miwayomi-all.jar no encontrado. Construyelo con: ./gradlew :server:shadowJar"
+  echo "miwayomi-all.jar not found. Build it with: ./gradlew :server:shadowJar"
   exit 1
 fi
 
 DATA="${MIWAYOMI_DATA:-$(pwd)/data}"
 PORT="${MIWAYOMI_PORT:-}"
 
-# --- aplicar actualización pendiente (Parte 4) ---
+# --- apply pending update (Part 4) ---
 UPDDIR="${DATA}/update"
 if [ -d "$UPDDIR" ]; then
   for NEW in "$UPDDIR"/*.jar.new; do
     [ -e "$NEW" ] || continue
-    echo "> Aplicando actualización: $(basename "$NEW") -> $JAR"
+    echo "> Applying update: $(basename "$NEW") -> $JAR"
     cp "$JAR" "$JAR.bak" 2>/dev/null || true
     mv "$NEW" "$JAR"
   done
   rm -f "$UPDDIR"/*.json 2>/dev/null || true
 fi
 
-# --- puerto libre ---
+# --- free port ---
 if [ -z "$PORT" ]; then
   PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()' 2>/dev/null \
     || echo $((20000 + RANDOM % 20000)))"
 fi
 
 echo "> miwayomi  ->  http://127.0.0.1:${PORT}"
-echo "> datos     ->  ${DATA}"
+echo "> data      ->  ${DATA}"
 
-# --- arrancar servidor en segundo plano ---
+# --- start server in background ---
 java -jar "$JAR" --data "$DATA" --port "$PORT" --no-open "$@" > /tmp/miwayomi-app.log 2>&1 &
 SERVER_PID=$!
 
@@ -49,7 +49,7 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 
-# --- localizar navegador ---
+# --- locate browser ---
 BROWSER=""
 for b in "$MIWAYOMI_BROWSER" google-chrome google-chrome-stable chromium chromium-browser microsoft-edge microsoft-edge-stable; do
   if command -v "$b" >/dev/null 2>&1; then BROWSER="$b"; break; fi
@@ -65,18 +65,18 @@ if [ -z "$BROWSER" ] && [ -x "flaresolverr/_internal/chrome/chrome" ]; then
   BROWSER="flaresolverr/_internal/chrome/chrome"
 fi
 if [ -z "$BROWSER" ]; then
-  echo "No se encontró Chrome/Edge/Chromium. Abre manualmente:"
+  echo "Chrome/Edge/Chromium not found. Open manually:"
   echo "  http://127.0.0.1:${PORT}/"
   wait "$SERVER_PID"
   exit 1
 fi
 
-echo "> Ventana propia con: $BROWSER"
+echo "> App window with: $BROWSER"
 PROFILE="${MIWAYOMI_PROFILE:-$HOME/.cache/miwayomi-app}"
 "$BROWSER" --app="http://127.0.0.1:${PORT}/" --user-data-dir="$PROFILE" >/dev/null 2>&1 &
 APP_PID=$!
 
-# --- al cerrar la ventana app, detener el servidor ---
+# --- when the app window closes, stop the server ---
 wait "$APP_PID" 2>/dev/null
 kill "$SERVER_PID" 2>/dev/null || true
-echo "> miwayomi detenido."
+echo "> miwayomi stopped."

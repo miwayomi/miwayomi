@@ -130,7 +130,7 @@ object JarFixer {
                 }
             }
         } catch (e: Exception) {
-            System.err.println("fixStackmapFrames error en $jar: $e")
+            System.err.println("fixStackmapFrames error in $jar: $e")
         }
     }
 
@@ -233,7 +233,7 @@ object JarFixer {
                     if (k >= insns.size()) { i++; continue }
                     val dup = insns[k]
                     if (dup is InsnNode && dup.opcode == Opcodes.DUP) {
-                        // localizar el <init> del constructor (saltando los argumentos)
+                        // locate the <init> of the constructor (skipping the arguments)
                         var j = k + 1
                         var init: MethodInsnNode? = null
                         var stop = false
@@ -251,11 +251,11 @@ object JarFixer {
                             var target: String? = null
                             var consumed = j + 1
                             if (init.owner != n.desc) {
-                                // desajuste new/init: el tipo real es el definido dentro del jar
+                                // new/init mismatch: the real type is the one defined inside the jar
                                 target = realTypeOf(classes, n.desc, init.owner)
                             }
                             if (target == null || target == n.desc) {
-                                // escanear el consumidor del objeto creado
+                                // scan the consumer of the created object
                                 var c = j + 1
                                 while (c < insns.size()) {
                                     val u = insns[c]
@@ -271,7 +271,7 @@ object JarFixer {
                                 val targetInJar = classes.containsKey(target + ".class")
                                 val newInJar = classes.containsKey(n.desc + ".class")
                                 val assignable = isSubclassOf(classes, n.desc, target)
-                                // solo tocar bytecode que ya es inválido (el valor no es asignable al campo/uso)
+                                // only touch bytecode that is already invalid (the value is not assignable to the field/use)
                                 val fix = !assignable && (
                                     targetInJar ||
                                     isSubclassOf(classes, target, n.desc) ||

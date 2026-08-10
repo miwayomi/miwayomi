@@ -29,10 +29,10 @@ fun Application.registerApi() {
     install(StatusPages) {
         exception<CloudflareChallengeException> { call, cause ->
 
-            println("[miwayomi] reto Cloudflare en ${cause.url}")
+            println("[miwayomi] Cloudflare challenge at ${cause.url}")
             call.respond(
                 HttpStatusCode.InternalServerError,
-                ErrorDto(cause.message ?: "reto de Cloudflare", challengeUrl = cause.url, challengeUserAgent = cause.userAgent),
+                ErrorDto(cause.message ?: "Cloudflare challenge", challengeUrl = cause.url, challengeUserAgent = cause.userAgent),
             )
         }
         exception<Throwable> { call, cause ->

@@ -58,7 +58,7 @@ class CdpClient(private val debugPort: Int) {
         )
         val wsUrl = json.parseToJsonElement(resp.body()).jsonObject["webSocketDebuggerUrl"]
             ?.jsonPrimitive?.contentOrNull
-            ?: error("Chrome no devolvió webSocketDebuggerUrl: ${resp.body().take(200)}")
+            ?: error("Chrome did not return a webSocketDebuggerUrl: ${resp.body().take(200)}")
         debuggerUrl = wsUrl
 
         val open = CompletableFuture<WebSocket>()
@@ -101,7 +101,7 @@ class CdpClient(private val debugPort: Int) {
             fut.get(30, TimeUnit.SECONDS)
         } catch (e: Exception) {
             pending.remove(id)
-            throw RuntimeException("CDP $method falló: ${e.message}", e)
+            throw RuntimeException("CDP $method failed: ${e.message}", e)
         }
     }
 

@@ -25,10 +25,10 @@ internal fun Long?.anime(manager: AnimeSourceManager): AnimeCatalogueSource? =
     this?.let { manager.get(it) as? AnimeCatalogueSource }
 
 internal suspend fun ApplicationCall.respondNotFound() =
-    respond(HttpStatusCode.NotFound, ErrorDto("Fuente no encontrada"))
+    respond(HttpStatusCode.NotFound, ErrorDto("Source not found"))
 
 internal suspend fun ApplicationCall.respondMissingUrl() =
-    respond(HttpStatusCode.BadRequest, ErrorDto("url requerido"))
+    respond(HttpStatusCode.BadRequest, ErrorDto("url is required"))
 
 internal suspend fun ApplicationCall.proxyStream(
     upstream: okhttp3.Response,
@@ -38,7 +38,7 @@ internal suspend fun ApplicationCall.proxyStream(
     val body = upstream.body
     if (body == null) {
         upstream.close()
-        respond(status, ErrorDto("sin cuerpo"))
+        respond(status, ErrorDto("empty body"))
         return
     }
     upstream.header("Content-Range")?.let { response.headers.append(HttpHeaders.ContentRange, it) }

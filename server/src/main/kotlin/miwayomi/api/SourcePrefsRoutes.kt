@@ -64,7 +64,7 @@ fun Application.registerSourcePrefsApi() {
             val id = call.parameters["sourceId"]?.toLongOrNull()
             val source = id?.let { mangaManager.get(it) ?: animeManager.get(it) }
             if (source == null) {
-                return@get call.respond(HttpStatusCode.NotFound, ErrorDto("Fuente no encontrada"))
+                return@get call.respond(HttpStatusCode.NotFound, ErrorDto("Source not found"))
             }
 
             val dto = buildPrefsDto(source, id, app)
@@ -76,11 +76,11 @@ fun Application.registerSourcePrefsApi() {
             val source = id?.let { mangaManager.get(it) ?: animeManager.get(it) }
             val prefs = source?.sourcePrefs()
             if (prefs == null) {
-                return@post call.respond(HttpStatusCode.NotFound, SourcePrefsSetDto(ok = false, error = "fuente no configurable o no encontrada"))
+                return@post call.respond(HttpStatusCode.NotFound, SourcePrefsSetDto(ok = false, error = "source not configurable or not found"))
             }
 
             val body = runCatching { call.receive<Map<String, JsonPrimitive>>() }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, SourcePrefsSetDto(ok = false, error = "cuerpo JSON inválido"))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, SourcePrefsSetDto(ok = false, error = "invalid JSON body"))
 
             try {
                 val editor = prefs.edit()
@@ -95,7 +95,7 @@ fun Application.registerSourcePrefsApi() {
                 editor.apply()
                 call.respond(SourcePrefsSetDto(ok = true))
             } catch (e: Throwable) {
-                call.respond(HttpStatusCode.InternalServerError, SourcePrefsSetDto(ok = false, error = e.message ?: "error al guardar"))
+                call.respond(HttpStatusCode.InternalServerError, SourcePrefsSetDto(ok = false, error = e.message ?: "error saving"))
             }
         }
     }
@@ -125,12 +125,12 @@ private fun buildPrefsDto(source: Any, id: Long, app: AndroidApp): SourcePrefsLi
             )
         } catch (e: Throwable) {
             val root = generateSequence(e) { it.cause }.lastOrNull() ?: e
-            println("[miwayomi] prefs de $id no disponibles: ${root.javaClass.simpleName}: ${root.message}")
+            println("[miwayomi] prefs for $id unavailable: ${root.javaClass.simpleName}: ${root.message}")
             SourcePrefsListDto(
                 sourceId = id.toString(),
                 name = sourceName(source),
                 configurable = true,
-                error = root.message ?: "no se pudieron cargar las preferencias",
+                error = root.message ?: "could not load preferences",
             )
         }
     }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Genera un instalador .exe de Windows con NSIS (desde Linux/macOS).
-# Requisito: sudo apt install nsis  (o brew install nsis en macOS)
-# Uso:
-#   ./packaging/build-installer.sh [version]                 # sin JRE (requiere Java en el equipo Windows)
+# Builds a Windows .exe installer with NSIS (from Linux/macOS).
+# Requirement: sudo apt install nsis  (or brew install nsis on macOS)
+# Usage:
+#   ./packaging/build-installer.sh [version]                 # without JRE (requires Java on the Windows machine)
 #   JRE_ZIP=temurin-21-windows-x64.zip ./packaging/build-installer.sh 0.2.0
-#     (JRE_ZIP = ruta a un zip del JDK/JRE de Windows para que el instalador sea autónomo)
+#     (JRE_ZIP = path to a Windows JDK/JRE zip so the installer is self-contained)
 set -e
 cd "$(dirname "$0")/.."
 
@@ -17,7 +17,7 @@ rm -rf "$STAGE"; mkdir -p "$STAGE" "$DIST"
 JAR="server/build/libs/miwayomi-all.jar"
 [ -f "$JAR" ] || JAR="miwayomi-all.jar"
 if [ ! -f "$JAR" ]; then
-  echo "miwayomi-all.jar no encontrado. Construyelo con: ./gradlew :server:shadowJar"
+  echo "miwayomi-all.jar not found. Build it with: ./gradlew :server:shadowJar"
   exit 1
 fi
 
@@ -25,13 +25,13 @@ cp "$JAR" "$STAGE/miwayomi-all.jar"
 cp miwayomi.bat "$STAGE/miwayomi.bat"
 
 if [ -n "$JRE_ZIP" ]; then
-  echo "> Empaquetando JRE de Windows: $JRE_ZIP"
+  echo "> Bundling Windows JRE: $JRE_ZIP"
   mkdir -p "$STAGE/jre"
   python3 - "$JRE_ZIP" "$STAGE/jre" <<'EOF'
 import zipfile, sys
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 EOF
-  # si el zip deja una subcarpeta (jdk-XX...), sube su contenido a jre/
+  # if the zip leaves a subfolder (jdk-XX...), move its content up to jre/
   if ! [ -f "$STAGE/jre/bin/java.exe" ]; then
     for d in "$STAGE"/jre/*/; do
       if [ -f "$d/bin/java.exe" ]; then
@@ -40,14 +40,14 @@ EOF
       fi
     done
   fi
-  echo "> JRE detectado: $(ls "$STAGE"/jre/bin/java.exe 2>/dev/null || echo 'NO (revisa el zip)')"
+  echo "> JRE detected: $(ls "$STAGE"/jre/bin/java.exe 2>/dev/null || echo 'NO (check the zip)')"
 fi
 
 if ! command -v makensis >/dev/null 2>&1; then
-  echo "ERROR: makensis no instalado. Instálalo con: sudo apt install nsis   (o brew install nsis)"
+  echo "ERROR: makensis not installed. Install it with: sudo apt install nsis   (or brew install nsis)"
   exit 1
 fi
 
-echo "> Generando instalador (NSIS) v$VERSION ..."
+echo "> Generating installer (NSIS) v$VERSION ..."
 makensis -DVERSION="$VERSION" packaging/miwayomi.nsi >/dev/null
-echo "> Listo: $DIST/miwayomi-setup.exe"
+echo "> Done: $DIST/miwayomi-setup.exe"

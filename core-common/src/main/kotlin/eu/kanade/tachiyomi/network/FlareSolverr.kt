@@ -102,7 +102,7 @@ class FlareSolverr(
 
         val r = post(requestBody)
         val sol = r["solution"]?.jsonObject
-            ?: throw RuntimeException("FlareSolverr no devolvió solución: ${r.toString().take(300)}")
+            ?: throw RuntimeException("FlareSolverr returned no solution: ${r.toString().take(300)}")
 
         val cookies = sol["cookies"]?.jsonArray?.mapNotNull { c ->
             val o = c.jsonObject

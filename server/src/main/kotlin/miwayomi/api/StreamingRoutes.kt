@@ -30,7 +30,7 @@ fun Application.registerStreamingApi() {
 
         get("/api/v1/proxy") {
             val url = call.request.queryParameters["url"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url requerido"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url is required"))
             val sourceId = call.request.queryParameters["sourceId"]?.toLongOrNull()
             val custom = parseHeadersParam(call.request.queryParameters["headers"])
             val headersParam = call.request.queryParameters["headers"] ?: ""
@@ -85,7 +85,7 @@ fun Application.registerStreamingApi() {
 
         get("/api/v1/hls") {
             val url = call.request.queryParameters["url"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url requerido"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url is required"))
             val sourceId = call.request.queryParameters["sourceId"]?.toLongOrNull()
             val headersParam = call.request.queryParameters["headers"].orEmpty()
             val custom = parseHeadersParam(headersParam)
@@ -127,7 +127,7 @@ fun Application.registerStreamingApi() {
 
         get("/api/v1/dash") {
             val url = call.request.queryParameters["url"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url requerido"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url is required"))
             val sourceId = call.request.queryParameters["sourceId"]?.toLongOrNull()
             val headersParam = call.request.queryParameters["headers"].orEmpty()
             val custom = parseHeadersParam(headersParam)
@@ -158,9 +158,9 @@ fun Application.registerStreamingApi() {
 
         get("/api/v1/dashseg") {
             val base = call.request.queryParameters["base"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("base requerido"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("base is required"))
             val rel = call.request.queryParameters["rel"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("rel requerido"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("rel is required"))
             val sourceId = call.request.queryParameters["sourceId"]?.toLongOrNull()
             val custom = parseHeadersParam(call.request.queryParameters["headers"])
             val (client, headers) = buildClientAndHeaders(sourceId, custom, mangaSources, animeSources, network)

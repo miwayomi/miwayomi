@@ -1110,7 +1110,7 @@ async function openCfModal(url, ua) {
       stage.innerHTML = `<div class="error">${escapeHtml(t("cf.browserError", b.error || res.status))}</div>`;
       return;
     }
-    stage.innerHTML = `<img id="cfShot" class="cf-shot" alt="Captura del reto">`;
+    stage.innerHTML = `<img id="cfShot" class="cf-shot" alt="Challenge screenshot">`;
     const img = $("#cfShot");
     img.addEventListener("click", cfClick);
     startCfPolling();
