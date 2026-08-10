@@ -2,6 +2,15 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.2] - 2026-08-10
+
+### Fixed
+- **Search HTTP 500**: search no longer forces `source.getFilterList()` on every request. Some extensions' `getFilterList()` throws `InstantiationError` (abstract filter classes instantiated in minified builds), which made every search return HTTP 500. Like Tachiyomi/Aniyomi, a plain text search now falls back to an empty filter list when `getFilterList()` fails.
+- The 500 error handler now prints the full stack trace to ease diagnosis.
+- Fixed a leftover Spanish log message (all logs are now English).
+
+---
+
 ## [v0.2.1] - 2026-08-09
 
 ### Added
