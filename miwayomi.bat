@@ -22,6 +22,20 @@ set "DATA=%MIWAYOMI_DATA%"
 if "%DATA%"=="" if exist "%CD%\data" set "DATA=%CD%\data"
 if "%DATA%"=="" set "DATA=%LOCALAPPDATA%\miwayomi\data"
 
+rem Apply a downloaded update if one exists (data\update\*.jar.new)
+set "UPDDIR=!DATA!\update"
+if exist "!UPDDIR!" (
+  for %%F in ("!UPDDIR!\*.jar.new") do (
+    if exist "%%~fF" (
+      echo Applying update: %%~nxF -^> %JAR%
+      copy /y "%JAR%" "%JAR%.bak" >nul 2>&1
+      copy /y "%%~fF" "%JAR%" >nul
+      del "%%~fF" >nul 2>&1
+    )
+  )
+  del "!UPDDIR!\*.json" >nul 2>&1
+)
+
 set "PORT="
 for /f %%p in ('powershell -NoProfile -Command "$l=New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,0); $l.Start(); $p=$l.LocalEndpoint.Port; $l.Stop(); $p"') do set "PORT=%%p"
 if "%PORT%"=="" set "PORT=34567"

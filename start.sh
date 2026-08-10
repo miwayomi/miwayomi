@@ -31,6 +31,19 @@ JAR="${MIWAYOMI_JAR:-}"
 if [ -z "${JAR}" ] && [ -f "miwayomi-all.jar" ]; then JAR="$(pwd)/miwayomi-all.jar"; fi
 if [ -z "${JAR}" ] && [ -f "server/build/libs/miwayomi-all.jar" ]; then JAR="$(pwd)/server/build/libs/miwayomi-all.jar"; fi
 
+# Apply a pending update if one exists (data/update/*.jar.new)
+UPDDIR="${DATA}/update"
+if [ -d "${UPDDIR}" ] && [ -n "${JAR}" ]; then
+  for NEW in "${UPDDIR}"/*.jar.new; do
+    [ -e "$NEW" ] || continue
+    echo "> Applying update: $(basename "$NEW") -> ${JAR}"
+    cp "${JAR}" "${JAR}.bak" 2>/dev/null || true
+    cp "$NEW" "${JAR}"
+    rm -f "$NEW"
+  done
+  rm -f "${UPDDIR}"/*.json 2>/dev/null || true
+fi
+
 if [ -n "${JAR}" ]; then
   echo "> Using runnable JAR: ${JAR}"
   echo "> JVM memory: ${MEM}"
