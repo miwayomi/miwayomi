@@ -25,7 +25,7 @@ class FixDoubleEncodedJsonInterceptor : Interceptor {
         val fixed = unwrapDoubleEncodedJson(bodyString)
 
         if (fixed != bodyString) {
-            println("[miwayomi] body JSON doble-codificado corregido (${bodyString.length} -> ${fixed.length} bytes)")
+            println("[miwayomi] fixed double-encoded JSON body (${bodyString.length} -> ${fixed.length} bytes)")
         }
 
         val newBody = fixed.toRequestBody(body.contentType())

@@ -39,6 +39,7 @@ fun Application.registerApi() {
 
             val root = generateSequence(cause) { it.cause }.lastOrNull() ?: cause
             println("[miwayomi] error: ${root.javaClass.simpleName}: ${root.message}")
+            cause.printStackTrace(System.out)
             call.respond(
                 HttpStatusCode.InternalServerError,
                 ErrorDto(cause.message ?: cause::class.simpleName ?: "error"),

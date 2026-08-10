@@ -1,5 +1,6 @@
 package miwayomi.api
 
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -34,7 +35,15 @@ fun Application.registerMangaApi() {
             val source = call.sourceId().manga(mangaSources) ?: return@get call.respondNotFound()
             val query = call.request.queryParameters["query"].orEmpty()
             val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-            val res = source.getSearchManga(page, query, source.getFilterList())
+            // Like Tachiyomi, a plain text search does not need the source's filter list.
+            // Some extensions' getFilterList() throws (e.g. InstantiationError on minified
+            // builds), which would make every search return HTTP 500. Fall back to an empty
+            // filter list instead of failing the whole request.
+            val filters = runCatching { source.getFilterList() }.getOrElse {
+                println("[miwayomi] getFilterList() failed for ${source.name}, using empty filter list: $it")
+                FilterList()
+            }
+            val res = source.getSearchManga(page, query, filters)
             call.respond(MangasPageDto(res.hasNextPage, res.mangas.map { it.toDto() }))
         }
 

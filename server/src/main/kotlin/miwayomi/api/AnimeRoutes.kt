@@ -1,5 +1,6 @@
 package miwayomi.api
 
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -34,7 +35,15 @@ fun Application.registerAnimeApi() {
             val source = call.sourceId().anime(animeSources) ?: return@get call.respondNotFound()
             val query = call.request.queryParameters["query"].orEmpty()
             val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
-            val res = source.getSearchAnime(page, query, source.getFilterList())
+            // Like Aniyomi, a plain text search does not need the source's filter list.
+            // Some extensions' getFilterList() throws (e.g. InstantiationError on minified
+            // builds), which would make every search return HTTP 500. Fall back to an empty
+            // filter list instead of failing the whole request.
+            val filters = runCatching { source.getFilterList() }.getOrElse {
+                println("[miwayomi] getFilterList() failed for ${source.name}, using empty filter list: $it")
+                AnimeFilterList()
+            }
+            val res = source.getSearchAnime(page, query, filters)
             call.respond(AnimesPageDto(res.hasNextPage, res.animes.map { it.toDto() }))
         }
 
