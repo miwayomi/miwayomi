@@ -38,7 +38,7 @@ Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml). A good bug
 - Exact steps to reproduce, expected vs. actual behavior.
 - Relevant logs and, for UI issues, a screenshot.
 
-> **Security vulnerabilities must not be reported in public issues.** See [SECURITY.md](.github/SECURITY.md) for the private reporting process.
+> **Security vulnerabilities must not be reported in public issues.** See [SECURITY.md](SECURITY.md) for the private reporting process.
 
 ### Suggesting features
 
