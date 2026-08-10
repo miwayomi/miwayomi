@@ -342,3 +342,12 @@ miwayomi is an **execution engine**, not a content service. Please read this car
 **No warranty.** This software is provided "as is", without warranty of any kind, express or implied. The author(s) are not liable for any damages arising from the use of this software.
 
 **If you use this software, you do so at your own risk and under your own responsibility.**
+
+## License
+
+miwayomi is licensed under the **Apache License, Version 2.0**. See
+[`LICENSE`](LICENSE) for the full license text.
+
+Portions of the codebase are adapted from
+[Aniyomi](https://github.com/aniyomiorg/aniyomi) (Apache-2.0); see
+[`NOTICE-ANIYOMI.md`](NOTICE-ANIYOMI.md) for attribution.
