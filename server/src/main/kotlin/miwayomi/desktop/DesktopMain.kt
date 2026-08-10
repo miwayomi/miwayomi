@@ -9,6 +9,7 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 
 fun main(args: Array<String>) {
+    miwayomi.update.UpdateManager.setLaunchArgs(args)
     var config = parseArgs(args)
     if (config.port <= 0) config = config.copy(port = freePort())
     if (!args.any { it == "--data" || it == "-d" }) {

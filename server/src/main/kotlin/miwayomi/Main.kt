@@ -27,6 +27,7 @@ fun buildServer(config: ServerConfig): EmbeddedServer<*, *> {
     Injekt.importModule(AppModule)
 
     UpdateManager.configure(config.dataDir)
+    UpdateManager.applyPendingUpdate(config.dataDir)
     UpdateManager.start()
 
     if (config.flareSolverrUrl != null) {
@@ -40,9 +41,11 @@ fun buildServer(config: ServerConfig): EmbeddedServer<*, *> {
     Injekt.get<MangaSourceManager>().register(DemoSource())
     Injekt.get<MangaSourceManager>().register(MockCfSource())
 
-    return embeddedServer(Netty, port = config.port, host = config.host) {
+    val srv = embeddedServer(Netty, port = config.port, host = config.host) {
         registerApi()
     }
+    UpdateManager.attachServer(srv)
+    return srv
 }
 
 fun openBrowser(port: Int) {
@@ -57,6 +60,7 @@ fun openBrowser(port: Int) {
 }
 
 fun main(args: Array<String>) {
+    UpdateManager.setLaunchArgs(args)
     val config = parseArgs(args)
     val server = buildServer(config)
 

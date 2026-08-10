@@ -2,6 +2,17 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.3] - 2026-08-10
+
+### Added
+- **In-app updater (all platforms)**: the server now applies a downloaded update itself at startup by replacing the running jar (works on macOS/Linux even without a launcher script; on Windows the launcher still handles the swap because the running jar is locked). A `/api/v1/update/relaunch` endpoint restarts the server with the same command line and arguments.
+- **Startup gate**: `/` now shows a "Checking for updates…" screen before the WebUI. It waits for the update check, applies/downloads/relaunches as needed, and only redirects to the app (`/index.html`) once the server is up to date.
+
+### Fixed
+- Previously the downloaded update was never applied when running `java -jar` directly on macOS/Linux (only the Windows launcher applied it). The update is now applied from within the jar itself.
+
+---
+
 ## [v0.2.2] - 2026-08-10
 
 ### Fixed

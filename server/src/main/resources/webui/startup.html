@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>miwayomi</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: #121212;
+    color: #eee;
+  }
+  .card {
+    text-align: center;
+    max-width: 420px;
+    padding: 40px 32px;
+  }
+  .logo { font-size: 34px; font-weight: 800; letter-spacing: .5px; margin-bottom: 8px; }
+  .logo span { color: #f47521; }
+  .status { font-size: 15px; color: #bbb; margin: 18px 0 22px; min-height: 22px; }
+  .spinner {
+    width: 34px; height: 34px; margin: 0 auto;
+    border: 3px solid #333; border-top-color: #f47521;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .done .spinner { display: none; }
+  a.link { color: #f47521; }
+  .actions { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    background: #f47521; color: #fff; border: 0; cursor: pointer;
+    padding: 9px 18px; border-radius: 8px; font-size: 14px; text-decoration: none;
+  }
+  .btn.ghost { background: #2a2a2a; color: #ddd; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="logo">miwayomi<span>.</span></div>
+    <div class="status" id="status">Checking for updates...</div>
+    <div class="spinner" id="spinner"></div>
+    <div class="actions" id="actions" style="display:none"></div>
+  </div>
+
+<script>
+(function () {
+  var I18N = {
+    en: {
+      checking: "Checking for updates...",
+      downloading: "Downloading the new version...",
+      ready: "Version {0} is downloaded. Restarting miwayomi to apply it...",
+      applied: "Update applied (v{0}). Relaunching miwayomi...",
+      relaunching: "Relaunching miwayomi...",
+      failed: "Could not restart automatically. Please close and relaunch miwayomi manually.",
+      open: "Open download",
+      upToDate: "You're up to date.",
+      goApp: "Open miwayomi",
+      error: "Could not check for updates."
+    },
+    es: {
+      checking: "Revisando actualizaciones...",
+      downloading: "Descargando la nueva versión...",
+      ready: "La versión {0} está descargada. Reiniciando miwayomi para aplicarla...",
+      applied: "Actualización aplicada (v{0}). Relanzando miwayomi...",
+      relaunching: "Relanzando miwayomi...",
+      failed: "No se pudo reiniciar automáticamente. Cierra y relanza miwayomi manualmente.",
+      open: "Abrir descarga",
+      upToDate: "Estás al día.",
+      goApp: "Abrir miwayomi",
+      error: "No se pudo comprobar las actualizaciones."
+    }
+  };
+  var lang = (localStorage.getItem("miwayomi.lang") || "en");
+  if (I18N[lang] === undefined) lang = "en";
+  var t = I18N[lang];
+  document.documentElement.lang = lang;
+
+  var status = document.getElementById("status");
+  var spinner = document.getElementById("spinner");
+  var actions = document.getElementById("actions");
+  var card = document.getElementById("card");
+
+  function show(txt, done) {
+    status.textContent = txt;
+    if (done) card.classList.add("done");
+    else card.classList.remove("done");
+  }
+  function showActions(html) { actions.innerHTML = html; actions.style.display = "flex"; }
+
+  function openDownload(url) {
+    if (url) { window.open(url, "_blank"); }
+  }
+
+  function relaunch() {
+    show(t.relaunching, true);
+    fetch("/api/v1/update/relaunch", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) {
+          // The old server exits shortly after; the new one starts a few seconds later.
+          setTimeout(function () { location.href = "/"; }, 8000);
+        } else {
+          show(t.failed, true);
+          showActions('<button class="btn ghost" onclick="location.href=\'/\'">' + t.goApp + "</button>");
+        }
+      })
+      .catch(function () {
+        show(t.failed, true);
+        showActions('<button class="btn ghost" onclick="location.href=\'/\'">' + t.goApp + "</button>");
+      });
+  }
+
+  // Wait for the server's background update check to finish (latestVersion != null).
+  var attempts = 0;
+  function poll() {
+    fetch("/api/v1/update")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.latestVersion == null) {
+          if (attempts++ < 60) { setTimeout(poll, 500); return; } // ~30s max
+          location.href = "/index.html";
+          return;
+        }
+        handle(d);
+      })
+      .catch(function () {
+        if (attempts++ < 20) { setTimeout(poll, 500); return; }
+        show(t.error, true);
+        showActions('<a class="btn" href="/index.html">' + t.goApp + "</a>");
+      });
+  }
+
+  function handle(d) {
+    var ver = d.latestVersion || "";
+    if (d.applied) {
+      show(t.applied.replace("{0}", ver), true);
+      relaunch();
+    } else if (d.available && d.downloaded) {
+      show(t.ready.replace("{0}", ver), true);
+      relaunch();
+    } else if (d.available) {
+      show(t.downloading, false);
+      // Download happens server-side; keep polling until it lands or fails.
+      var n = 0;
+      (function waitDownload() {
+        fetch("/api/v1/update").then(function (r) { return r.json(); }).then(function (u) {
+          if (u && u.downloaded) { handle(u); return; }
+          if (u && u.available === false) { location.href = "/index.html"; return; }
+          if (n++ < 120) { setTimeout(waitDownload, 500); return; } // ~60s max
+          show(t.ready.replace("{0}", ver), true);
+          showActions('<a class="btn" href="' + (d.url || "#") + '" target="_blank">' + t.open + "</a>");
+        }).catch(function () { if (n++ < 120) setTimeout(waitDownload, 500); });
+      })();
+    } else {
+      location.href = "/index.html";
+    }
+  }
+
+  show(t.checking, false);
+  poll();
+})();
+</script>
+</body>
+</html>

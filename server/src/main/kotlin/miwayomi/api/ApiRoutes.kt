@@ -1,6 +1,7 @@
 package miwayomi.api
 
 import eu.kanade.tachiyomi.network.CloudflareChallengeException
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -9,6 +10,8 @@ import io.ktor.server.http.content.staticResources
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
@@ -48,6 +51,17 @@ fun Application.registerApi() {
     }
 
     routing {
+        // Startup gate: shown before the WebUI. It checks for updates and only
+        // redirects to /index.html (the app) once the server is up to date.
+        get("/") {
+            val html = javaClass.classLoader.getResourceAsStream("webui/startup.html")?.readBytes()
+            if (html == null) {
+                call.respondText("miwayomi")
+            } else {
+                call.respondBytes(html, ContentType.Text.Html)
+            }
+        }
+
         staticResources("/", "webui")
 
         get("/api/v1/health") {
