@@ -1,0 +1,87 @@
+name: 🐛 Bug report
+description: Report a bug or unexpected behavior in miwayomi
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        Before submitting, please search the existing issues to avoid duplicates.
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to reproduce the behavior.
+      placeholder: |
+        1. Start miwayomi with ...
+        2. Open the WebUI / call the API ...
+        3. Do ...
+        4. See the error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: miwayomi version
+      description: Release tag (e.g. v0.2.1) or git commit hash.
+      placeholder: v0.2.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: OS / platform
+      description: Where are you running miwayomi?
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: runmode
+    attributes:
+      label: How are you running miwayomi?
+      options:
+        - Desktop app (./miwayomi or miwayomi.bat)
+        - Plain JAR (java -jar miwayomi-all.jar)
+        - Headless server (./start.sh)
+        - Dev mode (./gradlew :server:run)
+        - Windows installer
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / console output
+      description: Paste any relevant logs in the code block below.
+      render: shell
+  - type: checkboxes
+    id: extension
+    attributes:
+      label: Related to an extension?
+      description: If the bug only happens with a specific extension, tick this and name it below.
+      options:
+        - label: Yes, this happens with a specific extension (I'll name it in the description)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, related issues, or anything else that helps.

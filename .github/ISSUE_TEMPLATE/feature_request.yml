@@ -1,0 +1,35 @@
+name: 💡 Feature request
+description: Suggest a new feature or an improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a feature!
+        Please search the existing issues first to see if it was already proposed.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do, and why is it hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you would like to see.
+      placeholder: "miwayomi should ..."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Any workarounds or alternative designs you thought about.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Mockups, links, references, or anything else that helps.
