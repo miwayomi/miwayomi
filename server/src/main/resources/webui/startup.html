@@ -115,26 +115,6 @@
       });
   }
 
-  // Wait for the server's background update check to finish (latestVersion != null).
-  var attempts = 0;
-  function poll() {
-    fetch("/api/v1/update")
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || d.latestVersion == null) {
-          if (attempts++ < 60) { setTimeout(poll, 500); return; } // ~30s max
-          location.href = "/index.html";
-          return;
-        }
-        handle(d);
-      })
-      .catch(function () {
-        if (attempts++ < 20) { setTimeout(poll, 500); return; }
-        show(t.error, true);
-        showActions('<a class="btn" href="/index.html">' + t.goApp + "</a>");
-      });
-  }
-
   function handle(d) {
     var ver = d.latestVersion || "";
     if (d.applied) {
@@ -145,23 +125,38 @@
       relaunch();
     } else if (d.available) {
       show(t.downloading, false);
-      // Download happens server-side; keep polling until it lands or fails.
+      // The server downloads in the background; wait a little for it, then go to
+      // the app (the in-app banner handles the relaunch if it lands later).
       var n = 0;
       (function waitDownload() {
         fetch("/api/v1/update").then(function (r) { return r.json(); }).then(function (u) {
           if (u && u.downloaded) { handle(u); return; }
-          if (u && u.available === false) { location.href = "/index.html"; return; }
-          if (n++ < 120) { setTimeout(waitDownload, 500); return; } // ~60s max
-          show(t.ready.replace("{0}", ver), true);
-          showActions('<a class="btn" href="' + (d.url || "#") + '" target="_blank">' + t.open + "</a>");
-        }).catch(function () { if (n++ < 120) setTimeout(waitDownload, 500); });
+          if (n++ < 40) { setTimeout(waitDownload, 500); return; } // ~20s max
+          location.href = "/index.html";
+        }).catch(function () { if (n++ < 40) setTimeout(waitDownload, 500); else location.href = "/index.html"; });
       })();
     } else {
       location.href = "/index.html";
     }
   }
 
+  // Never block the app on the network check: poll briefly for the server's local
+  // update state, and go to the app once it's known or after a few seconds.
   show(t.checking, false);
+  var tries = 0;
+  function poll() {
+    fetch("/api/v1/update")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.latestVersion != null) { handle(d); return; }
+        if (tries++ < 8) { setTimeout(poll, 400); return; } // ~3.5s cap
+        location.href = "/index.html";
+      })
+      .catch(function () {
+        if (tries++ < 8) { setTimeout(poll, 400); return; }
+        location.href = "/index.html";
+      });
+  }
   poll();
 })();
 </script>

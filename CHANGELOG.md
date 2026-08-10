@@ -2,6 +2,13 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.4] - 2026-08-10
+
+### Fixed
+- **Startup gate no longer hangs**: the "Checking for updates…" screen waited for the server's GitHub check, which could take ~45s on slow networks and made the app appear stuck. It now uses only the local update state and opens the app in a few seconds regardless of network speed; updates are still applied/relaunched automatically when one is ready.
+
+---
+
 ## [v0.2.3] - 2026-08-10
 
 ### Added
