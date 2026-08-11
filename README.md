@@ -313,6 +313,7 @@ miwayomi/
 - ✅ **Favorites and tracking**: add/remove titles and remember the last read chapter.
 - ✅ **Extension manager** in the WebUI.
 - ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
+- ⏳ **Docker image** (GHCR + Docker Hub, multi-arch) planned for the near future — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
 - ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
 
 ## Documentation
