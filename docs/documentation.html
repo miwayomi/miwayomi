@@ -13,6 +13,7 @@
     --muted: #6b7280;
     --accent: #f47521;
     --accent-hi: #ff8c3b;
+    --accent-dim: rgba(244,117,33,.08);
     --code-bg: #14141a;
     --code-text: #e8e8f0;
   }
@@ -109,6 +110,13 @@
   .card2 { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
   .card2 h4 { margin: 0 0 8px; }
 
+  .downloads { margin: 22px 0 8px; padding: 20px 22px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 14px; }
+  .downloads h2 { margin: 0 0 6px; }
+  .downloads .grid2 { margin: 12px 0 0; }
+  .btn-dl { display: inline-block; margin: 8px 0 4px; padding: 10px 16px; background: var(--accent); color: #fff; font-weight: 700; border-radius: 10px; text-decoration: none; }
+  .btn-dl:hover { filter: brightness(1.1); }
+  .hint { color: var(--muted); font-size: 12.5px; }
+
   @media (max-width: 900px) { .toc { display: none; } main { padding: 20px; } }
 </style>
 </head>
@@ -126,6 +134,7 @@
 <div class="wrap">
   <nav class="toc">
     <h4>Contents</h4>
+    <a href="#downloads">Download</a>
     <a href="#story">The story</a>
     <a href="#what">What it is</a>
     <a href="#philosophy">Design philosophy</a>
@@ -153,6 +162,25 @@
       <h1>miwayomi<span class="dot">.</span></h1>
       <p>A self-contained server that runs <b>Aniyomi/Tachiyomi-format catalog extensions</b> on the JVM — with no Android device, no emulator, no cloud. This page documents everything: how it works, its technical requirements, its API, and how to make it yours.</p>
       <span class="pill">mi·wa·yo·mi — “beautiful reading”</span>
+    </div>
+
+    <div class="downloads" id="downloads">
+      <h2>Get miwayomi</h2>
+      <p>Pick your platform — both files come from the latest release and the app <b>auto-updates</b> itself.</p>
+      <div class="grid2">
+        <div class="card2">
+          <h4>🖥️ Windows</h4>
+          <p>Native installer — Start Menu &amp; desktop shortcut.</p>
+          <a class="btn-dl" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-setup.exe">⬇ Download installer (.exe)</a>
+        </div>
+        <div class="card2">
+          <h4>🐧 🍎 Any OS (JAR)</h4>
+          <p>Cross-platform JAR — needs <b>JDK 21</b>.</p>
+          <a class="btn-dl" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-all.jar">⬇ Download JAR</a>
+          <p class="hint">Run: <code>java -jar miwayomi-all.jar</code></p>
+        </div>
+      </div>
+      <p class="hint">All releases: <a href="https://github.com/miwayomi/miwayomi/releases">github.com/miwayomi/miwayomi/releases</a> · the Windows installer can also bundle a JRE for a fully standalone install.</p>
     </div>
 
     <h2 id="story">The story behind the name</h2>
