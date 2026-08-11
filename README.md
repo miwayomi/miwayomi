@@ -55,7 +55,7 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
 
 ## Features
 
-- **Loads APK extensions from the Tachiyomi/Aniyomi ecosystem** on the JVM (dex → jar with `dex2jar`, classes loaded with a child-first `ClassLoader`).
+- **Loads APK extensions from the Tachiyomi/Aniyomi ecosystem** on the JVM (dex → jar with `dex2jar`, classes loaded with a child-first `ClassLoader`). Converted bytecode is **auto-repaired on first load**, and extensions whose repository publishes a clean desktop **JVM jar** use it directly instead of being converted.
 - **Manga**: catalog, search, details, chapters, pages, and image proxy.
 - **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS (hls.js + `/hls` proxy), **DASH .mpd** (dash.js + `/dash`/`/dashseg` proxy with manifest rewriting), and direct MP4/WebM.
 - **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
@@ -114,14 +114,14 @@ sudo apt install nsis   # Debian / Ubuntu
 brew install nsis       # macOS (Homebrew)
 yay -S nsis             # Arch / EndeavourOS (the nsis package is in the AUR)
 
-./packaging/build-installer.sh 0.2.0
-# → packaging/dist/miwayomi-setup-0.2.0.exe
+./packaging/build-installer.sh <version>
+# → packaging/dist/miwayomi-setup-<version>.exe
 ```
 
 The installer bundles the JAR + launcher and creates Start Menu / desktop shortcuts. To make it fully standalone (bundles a JRE so the target PC does not need Java installed), pass a Windows JDK zip:
 
 ```bash
-JRE_ZIP=temurin-21-jdk_windows-x64_bin.zip ./packaging/build-installer.sh 0.2.0
+JRE_ZIP=temurin-21-jdk_windows-x64_bin.zip ./packaging/build-installer.sh <version>
 ```
 
 **B) Automatically on every release** via GitHub Actions (`.github/workflows/build-installer.yml`): on a tag `v*`, a `windows-latest` runner (WiX pre-installed) builds `miwayomi-<version>.exe` with `jpackage` and attaches it to the release. The installed app opens the dedicated app window (Edge/Chrome `--app`) and stops when the window is closed.
@@ -265,10 +265,11 @@ How it works internally:
 Tachiyomi/Aniyomi extensions are **APK files** that declare their catalog classes in the manifest `meta-data` (`tachiyomi.extension.class` / `tachiyomi.animeextension.class`). miwayomi runs them like this:
 
 1. **Manifest**: `apk-parser` reads the manifest XML and extracts the declared classes.
-2. **DEX → JAR**: `dex2jar` converts `classes.dex` to a `.jar`; a post-process fixes the bytecode so it is valid on the JVM (stackmap frames, constructors, phantom classes).
-3. **Loading**: a child-first `ClassLoader` loads the classes.
-4. **Instantiation**: the source factories (`SourceFactory`/`AnimeSourceFactory`) or direct sources are instantiated and registered in the manga/anime managers.
-5. **API**: the catalog, details, chapters/episodes, pages, and video endpoints delegate to each loaded source.
+2. **Bytecode**: if the repository publishes a desktop **JVM jar** alongside the APK, miwayomi uses it directly (no conversion). Otherwise `dex2jar` converts `classes.dex` to a `.jar`.
+3. **Repair**: `JarFixer` automatically fixes any jar on first load — it corrects the invalid `invokespecial <init>` owner that DEX→JVM conversion introduces (which otherwise causes `VerifyError` and HTTP 500 on search) and leaves valid bytecode untouched.
+4. **Loading**: a child-first `ClassLoader` loads the classes.
+5. **Instantiation**: the source factories (`SourceFactory`/`AnimeSourceFactory`) or direct sources are instantiated and registered in the manga/anime managers.
+6. **API**: the catalog, details, chapters/episodes, pages, and video endpoints delegate to each loaded source.
 
 This mechanism is **generic**: it works for any extension in that format, regardless of who distributes it or what content it handles.
 
@@ -276,7 +277,7 @@ This mechanism is **generic**: it works for any extension in that format, regard
 
 1. **AndroidCompat**: extensions reference `android.*` and `androidx.preference.*` classes. `android-compat` implements the ones that matter (SharedPreferences, Uri, Log, Context...) and an `android.jar` stub (API 30) covers the rest. A GraalJS engine replaces QuickJS/Duktape for anime extractors.
 2. **source-api ported to JVM**: the source API module (originally an Android target) is adapted as pure JVM, replacing the Android `expect`s with real classes.
-3. **Extension loading**: `dex2jar` converts the APK to a jar, a post-process fixes the bytecode for JVM, `ChildFirstURLClassLoader` loads it, and `SourceFactory`/`AnimeSourceFactory` instantiate the sources, which are registered in the managers.
+3. **Extension loading**: miwayomi uses the repository's desktop JVM jar when one is published (otherwise `dex2jar` converts the APK), `JarFixer` auto-repairs the bytecode on first load, `ChildFirstURLClassLoader` loads it, and `SourceFactory`/`AnimeSourceFactory` instantiate the sources, which are registered in the managers.
 4. **Server**: Ktor + REST endpoints + proxy with the headers the source requires (Referer/UA).
 
 ## Project structure
@@ -289,14 +290,14 @@ miwayomi/
 │                     #   logcat, JavaScriptEngine (GraalJS), torrents stub
 ├── source-api/       # Aniyomi source API ported to JVM (MangaSource/HttpSource + AnimeSource/AnimeHttpSource)
 ├── server/           # Ktor app: extension loading, source managers, REST API, proxy, WebUI
-└── data/             # runtime data: data/extensions/*.apk (+ converted .jar), prefs, cache
+└── data/             # runtime data: data/extensions/*.apk (+ converted or repo JVM jars), prefs, cache
 ```
 
 ## Status & roadmap
 
 - ✅ `source-api` of Tachiyomi/Aniyomi (manga + anime) compiled as a JVM module.
 - ✅ `core-common` and `android-compat` adapted to JVM (includes `ContextWrapper`, `org.json`, `androidx.preference`, WebView/Handler/Looper stubs, and GraalJS).
-- ✅ Loads APK extensions (dex→jar) and exposes their sources through the REST API, with a bytecode fixer for the converted jars.
+- ✅ Loads APK extensions (dex→jar, auto-repaired on first load) and clean desktop JVM jars (used directly when a repository publishes them), exposed through the REST API.
 - ✅ **Manga**: catalog, search, details, chapters, pages, and image proxy.
 - ✅ **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS, DASH .mpd, and direct MP4/WebM.
 - ✅ **Chunked streaming** and **full MIME support**.

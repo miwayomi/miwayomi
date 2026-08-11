@@ -134,22 +134,28 @@ sources on the JVM:
 
 ```mermaid
 flowchart LR
-    A[APK extension] --> B[apk-parser reads manifest]
-    B --> C[dex2jar: classes.dex → .jar]
-    C --> D[JarFixer: bytecode repairs]
-    D --> E[ChildFirstURLClassLoader]
-    E --> F[SourceFactory / Source instantiated]
-    F --> G[(Manga/Anime SourceManager)]
-    G --> H[REST API + WebUI]
+    A[Extension] --> B[apk-parser reads manifest]
+    B --> C{Repo JVM jar?}
+    C -- no --> D[dex2jar: classes.dex → .jar]
+    C -- yes --> E[Use published JVM jar]
+    D --> F[JarFixer: auto bytecode repair]
+    E --> F
+    F --> G[ChildFirstURLClassLoader]
+    G --> H[SourceFactory / Source instantiated]
+    H --> I[(Manga/Anime SourceManager)]
+    I --> J[REST API + WebUI]
 ```
 
 1. **Manifest** — `apk-parser` reads `AndroidManifest.xml` and extracts the
    declared catalog class(es).
-2. **DEX → JAR** — `dex2jar` converts `classes.dex` into a `.jar`.
-3. **Bytecode repair** — `JarFixer` fixes what Android's dex optimizer left
-   behind for plain-JVM consumption: stackmap frames, constructors that call a
-   non-super ancestor's `<init>`, and "phantom" classes that Android would
-   accept but the JVM rejects.
+2. **Bytecode** — if the repository publishes a desktop **JVM jar** next to the
+   APK, miwayomi downloads and uses it directly (no DEX conversion). Otherwise
+   `dex2jar` converts `classes.dex` into a `.jar`.
+3. **Auto repair** — `JarFixer` fixes any jar on first load (tracked by a marker
+   entry): it corrects the invalid `invokespecial <init>` owner that DEX→JVM
+   conversion introduces on `new T; dup; ...` constructions (which would
+   otherwise throw `VerifyError` and return HTTP 500 on search) and preserves
+   all valid bytecode untouched.
 4. **Class loading** — a *child-first* `ClassLoader` loads the classes so the
    extension can use its own bundled copies of libraries.
 5. **Instantiation** — the class is either a `SourceFactory`
@@ -202,7 +208,7 @@ flowchart TB
 | `core-common/` | The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine. |
 | `source-api/` | The Aniyomi source API compiled for the JVM: source interfaces and models that extensions implement. |
 | `server/` | The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI. |
-| `data/` | Runtime data: `data/extensions/*.apk` (+ converted `.jar`), source preferences, SQLite cache. |
+| `data/` | Runtime data: `data/extensions/*.apk` (+ converted or repo-published `.jar`), source preferences, SQLite cache. |
 
 ---
 
@@ -224,11 +230,13 @@ server/src/main/kotlin/miwayomi/
 │   └── SourceManagers.kt   MangaSourceManager + AnimeSourceManager: thread-safe
 │                           registries (ConcurrentHashMap) for every loaded source.
 ├── extension/
-│   ├── ExtensionManager.kt Loads/unloads APKs, instantiates factories/sources,
-│   │                       tracks which package owns each source, exposes uninstall.
+│   ├── ExtensionManager.kt Loads/unloads APKs (or repo JVM jars), instantiates
+│   │                       factories/sources, tracks package ownership, uninstall;
+│   │                       auto-fixes every jar on first load.
 │   ├── ExtensionMeta.kt    Parsed metadata of a loaded extension.
 │   ├── PackageTools.kt     apk-parser (manifest XML), dex2jar, class-name resolution.
-│   ├── JarFixer.kt         ASM bytecode repair so converted jars run on the JVM.
+│   ├── JarFixer.kt         ASM bytecode repair (invalid <init> owners from DEX→JVM),
+│   │                       auto-applied on first load via a marker entry.
 │   └── ChildFirstURLClassLoader.kt  ClassLoader that prefers the extension's own
 │                                   bundled classes over the parent's.
 ├── builtin/
@@ -248,7 +256,8 @@ server/src/main/kotlin/miwayomi/
     ├── StreamProxy.kt      Rewrites HLS and DASH manifests, resolves segments.
     ├── ProxyHelpers.kt     Header parsing, per-source OkHttp clients, URL normalization.
     ├── MimeTypes.kt        Infers correct MIME from extension when the CDN lies.
-    ├── ExtensionRoutes.kt  Repository index (JSON + protobuf), install/uninstall.
+    ├── ExtensionRoutes.kt  Repository index (JSON + protobuf), install (prefers
+    │                       repo JVM jars)/uninstall.
     ├── SourcePrefsRoutes.kt  GET/POST source preferences.
     ├── FavoritesRoutes.kt  Favorites + last-read progress.
     ├── CfRoutes.kt         Manual Cloudflare modal endpoints (start/shot/click/key/finish).
@@ -282,9 +291,14 @@ core-common/src/main/kotlin/eu/kanade/tachiyomi/network/
     ├── FixDoubleEncodedJsonInterceptor.kt  Repairs double-encoded JSON request bodies.
     ├── UserAgentInterceptor.kt       Injects the configured User-Agent.
     ├── RateLimitInterceptor.kt, SpecificHostRateLimitInterceptor.kt  Polite throttling.
-    ├── IgnoreGzipInterceptor.kt      Prevents double-decompression bugs.
     └── UncaughtExceptionInterceptor.kt  Converts stray failures into typed errors.
 ```
+
+> **Default client:** the shared `NetworkHelper` client registers the Cloudflare,
+> user-agent, JSON-fix, and uncaught-error interceptors only. Gzip and brotli are
+> intentionally **not** registered — newer sources check for a plain default
+> client — and OkHttp 5.4.0 (with `okhttp-zstd`) exposes
+> `okhttp3.CompressionInterceptor` for sources that opt in.
 
 Also in `core-common`: `logcat/` (logging), `tachiyomi/core/common/preference/`
 (in-memory preference store), `tachiyomi/core/common/util/` (coroutines, image,
@@ -322,6 +336,10 @@ source-api/src/main/kotlin/eu/kanade/tachiyomi/
 > `eu.kanade.tachiyomi.source.PreferenceScreen` were a distinct class, the
 > overrides would never match and extension preferences would break. Aliasing it
 > to the `androidx` type keeps the ecosystem's expectations intact.
+
+> **`memo` field:** `SManga` and `SChapter` include the `memo: JsonObject` field
+> that newer extensions populate via `setMemo(...)`; without it those sources
+> fail with `NoSuchMethodError`.
 
 ### `android-compat/` — the Android shim
 
@@ -837,6 +855,7 @@ Source preferences live in `data/prefs/source_<id>.properties`.
 | ------- | ----------- |
 | `Stub!` at runtime on an `android.*` method | The class is only a stub in `android.jar`; implement it in `android-compat` and remove it from the jar via `regenerate-android-jar.py`. |
 | `VerifyError: ... not assignable to ContextWrapper` | The `Context` hierarchy is wrong; keep `Application : ContextWrapper : Context` and drop it from the jar. |
+| Search returns HTTP 500 (`VerifyError: Call to wrong <init> method`) | The extension jar was corrupted by DEX→JVM conversion. Update to ≥ v0.2.5 (auto-repairs every jar on first load) or reinstall the extension; a repo-published JVM jar is used automatically. |
 | Port already in use after rebuild | Old process alive: `pkill -9 -f "server/build/install/server/lib"`. |
 | One package shows as dozens of sources | A single APK can declare many mirrors; the web UI groups them by package. |
 | A source's preferences don't appear | `PreferenceScreen` must alias `androidx.preference.PreferenceScreen` (it does in `source-api`). |
@@ -890,8 +909,9 @@ source), `extension/JarFixer.kt` (the cleverest file), and
 | **Source** | A catalog provider (manga or anime) implementing the source API. |
 | **Factory** | `SourceFactory`/`AnimeSourceFactory`; how one APK provides several sources. |
 | **Shim** | The `android-compat` layer that makes extensions believe Android exists. |
-| **DEX → JAR** | The conversion (via dex2jar) that turns an Android bytecode APK into JVM bytecode. |
-| **JarFixer** | The ASM pass that repairs bytecode the JVM would otherwise reject. |
+| **DEX → JAR** | The conversion (via dex2jar) that turns an Android bytecode APK into JVM bytecode; it can corrupt `<init>` owners, which `JarFixer` repairs. |
+| **JVM jar** | A desktop JVM jar that some repositories publish alongside the APK; loaded directly, skipping the DEX conversion. |
+| **JarFixer** | The ASM pass that repairs the bytecode corruption DEX→JVM conversion leaves behind (invalid `<init>` owners), applied automatically on first load. |
 | **Child-first ClassLoader** | Loads the extension's own classes before the parent's. |
 | **HLS / DASH** | Adaptive streaming formats (`.m3u8` / `.mpd`) transparently proxied. |
 | **CDP** | Chrome DevTools Protocol, used for the manual Cloudflare modal. |

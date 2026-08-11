@@ -222,6 +222,7 @@
     <ul>
       <li><b>Kotlin 2.2.0</b> · JVM 21 · Gradle 8.10.2 (wrapper).</li>
       <li><b>Ktor 3.2.3</b> (Netty) — HTTP server.</li>
+      <li><b>OkHttp 5.4.0</b> (with <code>okhttp-zstd</code>) — HTTP client.</li>
       <li><b>SQLite</b> (sqlite-jdbc) — local persistence.</li>
       <li><b>ASM + dex2jar + apk-parser</b> — the extension pipeline.</li>
       <li><b>GraalJS</b> — QuickJs/Duktape stand-ins.</li>
@@ -230,10 +231,10 @@
 
     <h2 id="how">How it works</h2>
     <p>Tachiyomi/Aniyomi extensions are APK files that announce their catalog classes in the manifest under <code>meta-data</code> (<code>tachiyomi.extension.class</code> / <code>tachiyomi.animeextension.class</code>). miwayomi turns those APKs into runnable sources on the JVM:</p>
-    <pre>APK extension
+    <pre>Extension (APK or repo-published JVM jar)
   → 1. apk-parser reads AndroidManifest.xml
-  → 2. dex2jar converts classes.dex to a .jar
-  → 3. JarFixer repairs bytecode (stackmap frames, constructors, phantom classes)
+  → 2. use the repo's JVM jar when published; otherwise dex2jar converts classes.dex to a .jar
+  → 3. JarFixer auto-repairs bytecode on first load (invalid &lt;init&gt; owners from DEX→JVM)
   → 4. ChildFirstURLClassLoader loads the classes
   → 5. SourceFactory / Source instantiated &amp; registered
   → 6. REST API + WebUI expose every catalog</pre>
@@ -246,7 +247,7 @@
       <tr><td><code>core-common/</code></td><td>The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine.</td></tr>
       <tr><td><code>source-api/</code></td><td>The Aniyomi source API compiled for the JVM: source interfaces and models extensions implement.</td></tr>
       <tr><td><code>server/</code></td><td>The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI.</td></tr>
-      <tr><td><code>data/</code></td><td>Runtime data: <code>data/extensions/*.apk</code> (+ converted <code>.jar</code>), preferences, SQLite + image cache.</td></tr>
+      <tr><td><code>data/</code></td><td>Runtime data: <code>data/extensions/*.apk</code> (+ converted or repo-published <code>.jar</code>), preferences, SQLite + image cache.</td></tr>
     </table>
 
     <h2 id="codebase">Codebase map (file by file)</h2>
@@ -257,9 +258,9 @@
 ├── di/                      <span class="cm">AppModule (Injekt) + ConfigHolder.</span>
 ├── source/SourceManagers.kt <span class="cm">Manga/Anime source registries.</span>
 ├── extension/
-│   ├── ExtensionManager.kt  <span class="cm">Loads/unloads APKs, tracks packages, uninstall.</span>
+│   ├── ExtensionManager.kt  <span class="cm">Loads/unloads APKs (or repo JVM jars); auto-fixes jars on load.</span>
 │   ├── PackageTools.kt      <span class="cm">apk-parser, dex2jar, class-name resolution.</span>
-│   ├── JarFixer.kt          <span class="cm">ASM bytecode repair for the JVM.</span>
+│   ├── JarFixer.kt          <span class="cm">ASM bytecode repair (invalid &lt;init&gt; owners from DEX→JVM); auto-applied on first load.</span>
 │   └── ChildFirstURLClassLoader.kt
 ├── builtin/                 <span class="cm">DemoSource (offline) + MockCfSource.</span>
 ├── cf/                      <span class="cm">CfBrowser + CdpClient (manual Cloudflare).</span>
@@ -272,7 +273,7 @@
     ├── ProxyHelpers.kt      <span class="cm">Header parsing, per-source clients, URL normalization.</span>
     ├── MimeTypes.kt         <span class="cm">MIME inference when the CDN lies.</span>
     ├── ImageCache.kt        <span class="cm">Disk cache for proxied images.</span>
-    ├── ExtensionRoutes.kt   <span class="cm">Repo index (JSON + protobuf), install/uninstall.</span>
+    ├── ExtensionRoutes.kt   <span class="cm">Repo index (JSON + protobuf), install (prefers JVM jars)/uninstall.</span>
     ├── SourcePrefsRoutes.kt <span class="cm">Source preferences GET/POST.</span>
     ├── FavoritesRoutes.kt   <span class="cm">Favorites + last-read progress.</span>
     ├── CfRoutes.kt          <span class="cm">Manual Cloudflare modal endpoints.</span>
@@ -282,7 +283,7 @@
 
     <h3>core-common/ — the network heart</h3>
     <div class="filetree">core-common/.../network/
-├── NetworkHelper.kt         <span class="cm">Builds the shared OkHttpClient; owns the SQLite store.</span>
+├── NetworkHelper.kt         <span class="cm">Builds the shared OkHttpClient (no gzip/brotli by default); owns the SQLite store.</span>
 ├── JvmCookieJar.kt          <span class="cm">Persistent cookie jar backed by SQLite.</span>
 ├── SqliteStore.kt           <span class="cm">SQLite: kv_store, cookies, favorites.</span>
 ├── CookieCodec.kt           <span class="cm">Cookie ↔ row (de)serialization.</span>
@@ -290,7 +291,7 @@
 ├── CloudflareChallengeException.kt
 ├── FlareSolverr.kt          <span class="cm">Optional auto-solver client.</span>
 ├── JavaScriptEngine.kt      <span class="cm">GraalJS (QuickJs/Duktape stand-ins).</span>
-└── interceptor/             <span class="cm">Cloudflare, JSON-fix, UA, rate-limit, gzip, uncaught.</span></div>
+└── interceptor/             <span class="cm">Cloudflare, JSON-fix, UA, rate-limit, uncaught.</span></div>
 
     <h3>source-api/ — the extension contract</h3>
     <div class="filetree">source-api/.../
@@ -527,6 +528,7 @@ cp lang/en.json lang/fr.json
       <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
       <tr><td><code>Stub!</code> on an <code>android.*</code> method</td><td>Only a stub in <code>android.jar</code>; implement it in <code>android-compat</code> and regenerate the jar.</td></tr>
       <tr><td><code>VerifyError: ... not assignable to ContextWrapper</code></td><td>The <code>Context</code> hierarchy is wrong; keep <code>Application : ContextWrapper : Context</code>.</td></tr>
+      <tr><td>Search returns HTTP 500 (<code>VerifyError: Call to wrong &lt;init&gt; method</code>)</td><td>The extension jar was corrupted by DEX→JVM conversion. Use v0.2.5+ (auto-repairs jars on first load) or reinstall the extension; a repo-published JVM jar is used automatically.</td></tr>
       <tr><td>Port already in use after rebuild</td><td>Old process alive: <code>pkill -9 -f "server/build/install/server/lib"</code>.</td></tr>
       <tr><td>One package shows as dozens of sources</td><td>A single APK can declare many mirrors; the UI groups them by package.</td></tr>
       <tr><td>Source preferences don’t appear</td><td><code>PreferenceScreen</code> must alias <code>androidx.preference.PreferenceScreen</code> (it does in <code>source-api</code>).</td></tr>
@@ -549,7 +551,8 @@ cp lang/en.json lang/fr.json
       <tr><td>Source</td><td>A catalog provider (manga or anime) implementing the source API.</td></tr>
       <tr><td>Factory</td><td><code>SourceFactory</code>/<code>AnimeSourceFactory</code>; how one APK provides several sources.</td></tr>
       <tr><td>Shim</td><td>The <code>android-compat</code> layer that makes extensions believe Android exists.</td></tr>
-      <tr><td>JarFixer</td><td>The ASM pass that repairs bytecode the JVM would otherwise reject.</td></tr>
+      <tr><td>JVM jar</td><td>A desktop JVM jar some repositories publish alongside the APK; loaded directly, skipping the DEX conversion.</td></tr>
+      <tr><td>JarFixer</td><td>The ASM pass that repairs the bytecode corruption DEX→JVM conversion leaves behind (invalid <code>&lt;init&gt;</code> owners), applied automatically on first load.</td></tr>
       <tr><td>HLS / DASH</td><td>Adaptive streaming formats (<code>.m3u8</code> / <code>.mpd</code>) transparently proxied.</td></tr>
       <tr><td>CDP</td><td>Chrome DevTools Protocol, used for the manual Cloudflare modal.</td></tr>
       <tr><td>SQLite store</td><td>Local persistence for cookies, favorites, and settings.</td></tr>
