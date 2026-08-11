@@ -418,6 +418,9 @@ Base URL: `http://<host>:4567/api/v1` — JSON in, JSON out.
 | `POST` | `/favorites` | Add favorite (`{sourceId,url,title,thumbnailUrl,type}`). |
 | `DELETE` | `/favorites?sourceId=&url=` | Remove favorite. |
 | `POST` | `/favorites/progress` | Save last-read chapter progress. |
+| `GET` | `/watch` | Anime watch history ("Continue watching"). |
+| `POST` | `/watch` | Save/update anime watch progress (`{sourceId,animeUrl,epUrl,...}`). |
+| `DELETE` | `/watch?sourceId=&animeUrl=&epUrl=` | Remove a watch-history entry. |
 | `GET` | `/extensions/repo?url=` | List an extension repository's index. |
 | `POST` | `/extensions/install` | Install `{repoUrl, apk}`. |
 | `POST` | `/extensions/uninstall` | Uninstall `{pkg}`. |
@@ -495,6 +498,13 @@ with:
 - **Source settings** — a "⚙ Config" button per source renders its declared
   preferences (switches, dropdowns, text fields) and saves them.
 - **Favorites** — star titles and jump back to the last chapter you read.
+- **Continue watching** — a home row built from the SQLite watch history that
+  resumes each anime episode exactly where you left off.
+- **Player extras** — invert the episode order (newest/oldest), auto-play the
+  next episode when one finishes, auto-select the best video source, and a ↺
+  restart button per episode.
+- **AniList sync** — connect your own AniList account in Settings to push your
+  watched-episode progress automatically.
 - **Cloudflare modal** — solves challenges by hand with a live headless browser.
 - **i18n** — English and Spanish out of the box; add a file in `lang/` for more.
 
@@ -844,6 +854,7 @@ Everything is stored in `data/cache/miwayomi.db` (SQLite, WAL mode):
 | `kv_store` | Key-value settings (including resolved hosts `cf_ua_*`). |
 | `cookies`  | Cloudflare and site cookies, persisted across restarts. |
 | `favorites`| Favorites + last-read chapter per entry. |
+| `watch_history` | Anime watch progress per episode (resume position, duration, episode number). |
 
 Source preferences live in `data/prefs/source_<id>.properties`.
 

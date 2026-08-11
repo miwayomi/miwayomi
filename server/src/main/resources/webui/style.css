@@ -525,6 +525,52 @@ button:active { transform: scale(0.97); }
 }
 .video-item:hover { border-color: var(--accent); }
 
+/* ---------- Player extras (order / autoplay / resume) ---------- */
+.order-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+}
+.order-btn:hover { border-color: var(--accent); color: var(--accent-hi); }
+.player-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.pctl { display: flex; align-items: center; gap: 7px; color: var(--text); cursor: pointer; }
+.pctl input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+#qualityBtns .qbtn.active { border-color: var(--accent); color: var(--accent-hi); background: var(--accent-dim); }
+.resume-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 26, 0.92);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  padding: 9px 18px;
+  font-size: 13px;
+  z-index: 60;
+  box-shadow: var(--shadow);
+}
+.resume-toast.hidden { display: none; }
+.watch-card .card-sub.watch-sub { color: var(--accent-hi); }
+.watch-bar { height: 4px; background: var(--panel2); margin: 0 10px 10px; border-radius: 3px; overflow: hidden; }
+.watch-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
 /* ---------- Modals ---------- */
 .modal {
   position: fixed;
@@ -577,6 +623,9 @@ button:active { transform: scale(0.97); }
   outline: none;
   max-width: 240px;
 }
+.setting-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+.anilist-on { color: var(--success, #3ddc97); font-weight: 600; }
+.anilist-off { color: var(--muted); }
 
 /* ---------- Extensions modal ---------- */
 .repo-bar { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }

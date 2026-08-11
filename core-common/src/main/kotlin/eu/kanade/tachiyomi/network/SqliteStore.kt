@@ -48,6 +48,22 @@ class SqliteStore(dbFile: File) : AutoCloseable {
                     PRIMARY KEY (source_id, url)
                 )""",
             )
+            st.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS watch_history (
+                    source_id        TEXT NOT NULL,
+                    anime_url        TEXT NOT NULL,
+                    ep_url           TEXT NOT NULL,
+                    anime_title      TEXT NOT NULL,
+                    ep_name          TEXT NOT NULL,
+                    thumb            TEXT,
+                    time_seconds     REAL NOT NULL,
+                    duration_seconds REAL NOT NULL,
+                    updated_at       INTEGER NOT NULL,
+                    completed        INTEGER NOT NULL DEFAULT 0,
+                    episode_number   INTEGER,
+                    PRIMARY KEY (source_id, anime_url, ep_url)
+                )""",
+            )
         }
     }
 
@@ -225,6 +241,66 @@ class SqliteStore(dbFile: File) : AutoCloseable {
             ps.setString(2, lastReadName)
             ps.setString(3, sourceId)
             ps.setString(4, url)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun watchAll(): List<WatchEntry> =
+        connection.createStatement().use { st ->
+            st.executeQuery(
+                "SELECT source_id, anime_url, ep_url, anime_title, ep_name, thumb, time_seconds, duration_seconds, updated_at, completed, episode_number FROM watch_history ORDER BY updated_at DESC",
+            ).use { rs ->
+                val out = mutableListOf<WatchEntry>()
+                while (rs.next()) {
+                    val epNum = rs.getInt(11)
+                    out.add(
+                        WatchEntry(
+                            sourceId = rs.getString(1),
+                            animeUrl = rs.getString(2),
+                            epUrl = rs.getString(3),
+                            animeTitle = rs.getString(4),
+                            epName = rs.getString(5),
+                            thumb = rs.getString(6),
+                            timeSeconds = rs.getDouble(7),
+                            durationSeconds = rs.getDouble(8),
+                            updatedAt = rs.getLong(9),
+                            completed = rs.getInt(10) != 0,
+                            episodeNumber = if (rs.wasNull()) null else epNum,
+                        ),
+                    )
+                }
+                out
+            }
+        }
+
+    @Synchronized
+    fun watchUpsert(w: WatchEntry) {
+        connection.prepareStatement(
+            """INSERT OR REPLACE INTO watch_history (source_id, anime_url, ep_url, anime_title, ep_name, thumb, time_seconds, duration_seconds, updated_at, completed, episode_number)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ).use { ps ->
+            ps.setString(1, w.sourceId)
+            ps.setString(2, w.animeUrl)
+            ps.setString(3, w.epUrl)
+            ps.setString(4, w.animeTitle)
+            ps.setString(5, w.epName)
+            ps.setString(6, w.thumb)
+            ps.setDouble(7, w.timeSeconds)
+            ps.setDouble(8, w.durationSeconds)
+            ps.setLong(9, w.updatedAt)
+            ps.setInt(10, if (w.completed) 1 else 0)
+            if (w.episodeNumber != null) ps.setInt(11, w.episodeNumber) else ps.setNull(11, java.sql.Types.INTEGER)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun watchDelete(sourceId: String, animeUrl: String, epUrl: String) {
+        connection.prepareStatement("DELETE FROM watch_history WHERE source_id = ? AND anime_url = ? AND ep_url = ?").use { ps ->
+            ps.setString(1, sourceId)
+            ps.setString(2, animeUrl)
+            ps.setString(3, epUrl)
             ps.executeUpdate()
         }
     }

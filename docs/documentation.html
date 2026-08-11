@@ -330,6 +330,7 @@
       <tr><td>GET</td><td><code>/proxy|/hls|/dash|/dashseg</code></td><td>Media proxy (images are cached on disk).</td></tr>
       <tr><td>GET/POST</td><td><code>/sources/{id}/prefs</code></td><td>Source preferences.</td></tr>
       <tr><td>GET/POST/DELETE</td><td><code>/favorites…</code></td><td>Favorites + progress.</td></tr>
+      <tr><td>GET/POST/DELETE</td><td><code>/watch</code></td><td>Anime watch history (continue watching / resume).</td></tr>
       <tr><td>GET/POST</td><td><code>/extensions/repo|install|uninstall</code></td><td>Extension manager.</td></tr>
       <tr><td>GET/POST</td><td><code>/cf/…</code></td><td>Manual Cloudflare resolution.</td></tr>
     </table>
@@ -366,6 +367,9 @@ curl "http://localhost:4567/api/v1/manga/8448310129093543312/chapters?url=%2Fman
       <div class="card2"><h4>▶ Player with episodes</h4><p>Video player with a side episode list and quality selector.</p></div>
       <div class="card2"><h4>📖 Continuous reader</h4><p>Manga pages flow with no gaps — ideal for manhwa.</p></div>
       <div class="card2"><h4>🌐 i18n</h4><p>English &amp; Spanish; add a <code>lang/&lt;code&gt;.json</code> for more.</p></div>
+      <div class="card2"><h4>▶ Continue watching</h4><p>Home row from SQLite history — resumes each episode where you left off.</p></div>
+      <div class="card2"><h4>🔀 Player extras</h4><p>Invert episode order, auto-play next, auto-select source, restart.</p></div>
+      <div class="card2"><h4>📡 AniList sync</h4><p>Connect your account to push watched-episode progress.</p></div>
     </div>
 
     <h2 id="customizing">Customizing the UI</h2>
@@ -521,6 +525,7 @@ cp lang/en.json lang/fr.json
       <tr><td><code>kv_store</code></td><td>Key-value settings (including resolved hosts <code>cf_ua_*</code>).</td></tr>
       <tr><td><code>cookies</code></td><td>Cloudflare and site cookies, persisted across restarts.</td></tr>
       <tr><td><code>favorites</code></td><td>Favorites + last-read chapter per entry.</td></tr>
+      <tr><td><code>watch_history</code></td><td>Anime watch progress per episode (resume position, duration, episode number).</td></tr>
     </table>
     <p>Source preferences live in <code>data/prefs/source_&lt;id&gt;.properties</code>, and the proxied-image cache in <code>data/cache/images/</code>.</p>
 

@@ -8,6 +8,10 @@ let state = {
   typeFilter: "all",
   currentView: "home",
   catalog: null,
+  episodes: [],
+  currentEncUrl: null,
+  currentEpName: "",
+  currentEpNumber: null,
 };
 
 let cfRetry = null;
@@ -288,6 +292,8 @@ async function renderHome() {
       </div>
     </div>`;
   let html = hero;
+  const watch = await listWatch();
+  if (watch.length) html += rowWrap(t("player.continueWatching"), watch.map((w) => watchCard(w)).join(""));
   if (manga.length && (state.typeFilter === "all" || state.typeFilter === "manga")) {
     html += rowWrap(t("nav.manga"), manga.map((s) => sourceCard(s)).join(""));
   }
@@ -526,21 +532,7 @@ async function renderDetail(type, d) {
     state.episodes = [];
     const data = await getJSON(`${api}/anime/${state.activeSource.id}/episodes?url=${url}`);
     state.episodes = data.episodes || [];
-    const epThumb = (e) => {
-      if (e.preview_url) return `<img class="ep-thumb-img ready" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(e.preview_url)}">`;
-      if (d.thumbnail_url) return `<img class="ep-thumb-img ready" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(d.thumbnail_url)}">`;
-      return "";
-    };
-    const items = state.episodes.map((e, i) => `
-      <div class="ep-card" onclick="openEpisode('${encodeURIComponent(e.url)}','${escapeHtml(e.name)}')">
-        <div class="ep-thumb">
-          <span class="ep-num">E${e.episode_number ?? i + 1}</span>
-          ${epThumb(e)}
-        </div>
-        <div class="ep-name">${escapeHtml(e.name)}</div>
-      </div>`).join("");
-    $("#entryList").innerHTML = `<div class="list-title">${escapeHtml(t("detail.episodes"))}</div>` +
-      (items ? `<div class="ep-grid">${items}</div>` : `<div class="empty">${escapeHtml(t("detail.noEpisodes"))}</div>`);
+    renderAnimeEpisodes(d, state.episodes);
   }
 }
 
@@ -643,11 +635,349 @@ async function openChapter(encUrl, name) {
   }
 }
 
+/* ---------------- Player helpers / order / watch ---------------- */
+
+function episodeOrder() {
+  return localStorage.getItem("miwayomi.episodeOrder") || "newest";
+}
+function setEpisodeOrder(o) {
+  localStorage.setItem("miwayomi.episodeOrder", o);
+}
+function sortEpisodes(list) {
+  const arr = (list || []).slice();
+  const hasNum = arr.some((e) => e.episode_number != null && e.episode_number !== 0);
+  if (hasNum) arr.sort((a, b) => (Number(a.episode_number) || 0) - (Number(b.episode_number) || 0));
+  return episodeOrder() === "oldest" ? arr : arr.reverse();
+}
+function toggleDetailOrder() {
+  setEpisodeOrder(episodeOrder() === "oldest" ? "newest" : "oldest");
+  if (state.detailObj && state.episodes) renderAnimeEpisodes(state.detailObj, state.episodes);
+}
+function togglePlayerOrder() {
+  setEpisodeOrder(episodeOrder() === "oldest" ? "newest" : "oldest");
+  renderPlayerEpisodes(state.episodes || [], state.currentEncUrl);
+}
+function setAutoPlay(v) { localStorage.setItem("miwayomi.autoPlayNext", v ? "1" : "off"); }
+function setAutoSource(v) { localStorage.setItem("miwayomi.autoSource", v ? "1" : "off"); }
+
+function renderAnimeEpisodes(d, eps) {
+  const list = sortEpisodes(eps || []);
+  const orderLabel = episodeOrder() === "oldest" ? t("player.orderOldest") : t("player.orderNewest");
+  const epThumb = (e) => {
+    if (e.preview_url) return `<img class="ep-thumb-img ready" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(e.preview_url)}">`;
+    if (d && d.thumbnail_url) return `<img class="ep-thumb-img ready" src="/api/v1/proxy?sourceId=${state.activeSource.id}&url=${encodeURIComponent(d.thumbnail_url)}">`;
+    return "";
+  };
+  const items = list.map((e, i) => `
+    <div class="ep-card" onclick="openEpisode('${encodeURIComponent(e.url)}','${escapeHtml(e.name)}')">
+      <div class="ep-thumb">
+        <span class="ep-num">E${e.episode_number ?? i + 1}</span>
+        ${epThumb(e)}
+      </div>
+      <div class="ep-name">${escapeHtml(e.name)}</div>
+    </div>`).join("");
+  $("#entryList").innerHTML = `<div class="list-title">${escapeHtml(t("detail.episodes"))}
+      <button class="order-btn" onclick="toggleDetailOrder()" title="${escapeHtml(t("player.orderHint"))}">${escapeHtml(t("player.orderIcon"))} ${escapeHtml(orderLabel)}</button>
+    </div>` +
+    (items ? `<div class="ep-grid">${items}</div>` : `<div class="empty">${escapeHtml(t("detail.noEpisodes"))}</div>`);
+}
+
+function pickBestVideo(videos) {
+  let best = 0, bestRes = -1;
+  (videos || []).forEach((v, i) => {
+    const res = parseInt(v.resolution, 10) || 0;
+    if (res > bestRes) { bestRes = res; best = i; }
+  });
+  return best;
+}
+
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const mm = m < 10 ? "0" + m : "" + m;
+  const ss = sec < 10 ? "0" + sec : "" + sec;
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = $("#resumeToast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { const x = $("#resumeToast"); if (x) x.classList.add("hidden"); }, 4000);
+}
+
+/* ---------------- Watch history / resume (server DB) ---------------- */
+
+function safeDecode(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
+function watchEntryKey(sourceId, animeUrl, epUrl) { return `${sourceId}|||${animeUrl}|||${epUrl}`; }
+function currentWatchEntry() {
+  if (!state.activeSource || !state.detail || !state.currentEncUrl) return null;
+  const key = watchEntryKey(state.activeSource.id, safeDecode(state.detail.url), safeDecode(state.currentEncUrl));
+  return { key, sourceId: String(state.activeSource.id), type: "anime", animeUrl: safeDecode(state.detail.url),
+    epUrl: safeDecode(state.currentEncUrl), animeTitle: state.detail.title || "",
+    epName: state.currentEpName || "", thumb: state.detail.thumb || "", time: 0, duration: 0,
+    updatedAt: Date.now(), completed: false, episodeNumber: state.currentEpNumber != null ? state.currentEpNumber : null };
+}
+
+let watchCache = null;
+let watchCacheAt = 0;
+async function loadWatchCache(force) {
+  if (watchCache !== null && !force && Date.now() - watchCacheAt < 20000) return watchCache;
+  try {
+    const res = await fetch(`${api}/watch`);
+    if (res.ok) { watchCache = await res.json(); watchCacheAt = Date.now(); }
+  } catch (e) { }
+  return watchCache || [];
+}
+function savedWatchFor(sourceId, animeUrl, epUrl) {
+  const key = watchEntryKey(sourceId, animeUrl, epUrl);
+  return (watchCache || []).find((w) => watchEntryKey(w.sourceId, w.animeUrl, w.epUrl) === key) || null;
+}
+function upsertWatchCache(w) {
+  watchCache = watchCache || [];
+  const key = watchEntryKey(w.sourceId, w.animeUrl, w.epUrl);
+  const i = watchCache.findIndex((x) => watchEntryKey(x.sourceId, x.animeUrl, x.epUrl) === key);
+  const entry = { sourceId: w.sourceId, animeUrl: w.animeUrl, epUrl: w.epUrl, animeTitle: w.animeTitle,
+    epName: w.epName, thumb: w.thumb, timeSeconds: w.time, durationSeconds: w.duration,
+    updatedAt: w.updatedAt, completed: w.completed || false, episodeNumber: w.episodeNumber };
+  if (i >= 0) watchCache[i] = Object.assign({}, watchCache[i], entry);
+  else watchCache.unshift(entry);
+  watchCache = watchCache.slice(0, 40);
+}
+function removeWatchCache(w) {
+  watchCache = (watchCache || []).filter((x) => watchEntryKey(x.sourceId, x.animeUrl, x.epUrl) !== watchEntryKey(w.sourceId, w.animeUrl, w.epUrl));
+}
+
+async function saveWatchProgress(time, duration) {
+  const e = currentWatchEntry(); if (!e) return;
+  e.time = Math.max(0, time || 0); e.duration = duration || 0;
+  e.updatedAt = Date.now();
+  upsertWatchCache(e);
+  try {
+    await fetch(`${api}/watch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceId: e.sourceId, animeUrl: e.animeUrl, epUrl: e.epUrl,
+        animeTitle: e.animeTitle, epName: e.epName, thumb: e.thumb,
+        timeSeconds: e.time, durationSeconds: e.duration, completed: e.completed,
+        episodeNumber: e.episodeNumber,
+      }),
+    });
+    syncToAniList(e);
+  } catch (err) { }
+}
+async function clearWatchProgress() {
+  const e = currentWatchEntry(); if (!e) return;
+  removeWatchCache(e);
+  try {
+    await fetch(`${api}/watch?sourceId=${encodeURIComponent(e.sourceId)}&animeUrl=${encodeURIComponent(e.animeUrl)}&epUrl=${encodeURIComponent(e.epUrl)}`, { method: "DELETE" });
+  } catch (err) { }
+}
+async function listWatch() {
+  const list = await loadWatchCache();
+  return (list || []).filter((w) => w && w.epUrl).slice(0, 12);
+}
+function watchCard(w) {
+  const pct = w.durationSeconds ? Math.min(100, Math.round((w.timeSeconds / w.durationSeconds) * 100)) : 0;
+  const thumb = w.thumb
+    ? `<img loading="lazy" src="/api/v1/proxy?sourceId=${w.sourceId}&url=${encodeURIComponent(w.thumb)}">`
+    : `<div class="card-img-placeholder">${escapeHtml((w.animeTitle || "?").charAt(0).toUpperCase())}</div>`;
+  return `
+    <div class="card watch-card" onclick="openWatch('${w.sourceId}','${encodeURIComponent(w.animeUrl)}','${encodeURIComponent(w.epUrl)}','${escapeHtml(w.epName)}')">
+      ${thumb}
+      <div class="card-title">${escapeHtml(w.animeTitle)}</div>
+      <div class="card-sub watch-sub">${escapeHtml(w.epName)}</div>
+      <div class="watch-bar"><div class="watch-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+}
+async function openWatch(sourceId, animeUrl, epUrl, epName) {
+  navPush(() => { setNav("home"); renderHome(); });
+  state.activeSource = { id: sourceId, type: "anime", name: "" };
+  const main = $("#content");
+  main.innerHTML = `<div class="loading">${escapeHtml(t("common.loading"))}</div>`;
+  try {
+    const d = await getJSON(`${api}/anime/${sourceId}/details?url=${encodeURIComponent(safeDecode(animeUrl))}`);
+    await renderDetail("anime", d);
+    openEpisode(encodeURIComponent(safeDecode(epUrl)), epName, true);
+  } catch (e) {
+    main.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
+  }
+}
+
+function nextEpisode() {
+  const eps = sortEpisodes(state.episodes || []);
+  if (!eps.length || !state.currentEncUrl) return null;
+  const cur = decodeURIComponent(state.currentEncUrl);
+  const idx = eps.findIndex((e) => decodeURIComponent(e.url) === cur);
+  if (idx < 0 || idx >= eps.length - 1) return null;
+  return eps[idx + 1];
+}
+function attemptPlay(video) {
+  if (!video) return;
+  const p = video.play && video.play();
+  if (p && p.catch) p.catch(() => { });
+}
+function maybeResume(video) {
+  const e = currentWatchEntry();
+  if (!e) return;
+  const saved = savedWatchFor(e.sourceId, e.animeUrl, e.epUrl);
+  if (!saved) return;
+  const savedTime = saved.timeSeconds || 0;
+  const savedDur = saved.durationSeconds || 0;
+  const nearEnd = savedDur > 0 && savedTime > savedDur - 15;
+  if (savedTime < 10 || nearEnd) return;
+  const sec = savedTime;
+  const doResume = () => {
+    try { if (!video.currentTime || video.currentTime < sec - 2) video.currentTime = sec; } catch (_) { }
+    attemptPlay(video);
+  };
+  if (video.readyState >= 1) doResume();
+  else video.addEventListener("loadedmetadata", doResume, { once: true });
+  toast(t("player.resuming", fmtTime(sec)));
+}
+function bindVideoEvents(video) {
+  if (video.__bound) return;
+  video.__bound = true;
+  let lastSave = 0;
+  video.addEventListener("timeupdate", () => {
+    const now = Date.now();
+    if (now - lastSave < 3000) return;
+    lastSave = now;
+    saveWatchProgress(video.currentTime, video.duration);
+  });
+  video.addEventListener("pause", () => saveWatchProgress(video.currentTime, video.duration));
+  video.addEventListener("ended", () => {
+    clearWatchProgress();
+    if (localStorage.getItem("miwayomi.autoPlayNext") !== "off") {
+      const nx = nextEpisode();
+      if (nx) openEpisode(encodeURIComponent(nx.url), nx.name, true);
+    }
+  });
+}
+function restartEpisode() {
+  const e = currentWatchEntry();
+  if (e) clearWatchProgress();
+  const x = $("#resumeToast"); if (x) x.classList.add("hidden");
+  const v = $("#videoPlayer");
+  if (v) { try { v.currentTime = 0; } catch (_) { } attemptPlay(v); }
+}
+
+/* ---------------- AniList sync ---------------- */
+
+const ANILIST_API = "https://graphql.anilist.co/graphql";
+function anilistClientId() { return (localStorage.getItem("miwayomi.anilist.clientId") || "").trim(); }
+function anilistToken() { return localStorage.getItem("miwayomi.anilist.token") || ""; }
+function anilistSyncOn() { return localStorage.getItem("miwayomi.anilist.sync") !== "off"; }
+function anilistMediaCache() { try { return JSON.parse(localStorage.getItem("miwayomi.anilist.media") || "{}"); } catch (e) { return {}; } }
+function anilistSaveMediaCache(c) { try { localStorage.setItem("miwayomi.anilist.media", JSON.stringify(c)); } catch (e) { } }
+
+async function anilistGraphql(query, vars) {
+  const res = await fetch(ANILIST_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json", "Authorization": "Bearer " + anilistToken() },
+    body: JSON.stringify({ query, variables: vars }),
+  });
+  if (!res.ok) throw new Error("AniList HTTP " + res.status);
+  return res.json();
+}
+
+async function anilistUsername() {
+  try {
+    const d = await anilistGraphql("query { Viewer { name } }", {});
+    return d && d.data && d.data.Viewer ? d.data.Viewer.name : null;
+  } catch (e) { return null; }
+}
+
+async function syncToAniList(entry) {
+  if (!anilistSyncOn()) return;
+  if (!anilistToken()) return;
+  if (!entry || !entry.episodeNumber || !entry.animeTitle) return;
+  try {
+    const cache = anilistMediaCache();
+    const mkey = `${entry.sourceId}|||${entry.animeUrl}`;
+    let mediaId = cache[mkey];
+    if (!mediaId) {
+      const s = await anilistGraphql("query($s: String) { Media(search: $s, type: ANIME) { id } }", { s: entry.animeTitle });
+      const media = s && s.data && s.data.Media;
+      if (!media || !media.id) return;
+      mediaId = media.id;
+      cache[mkey] = mediaId;
+      anilistSaveMediaCache(cache);
+    }
+    let synced = {};
+    try { synced = JSON.parse(localStorage.getItem("miwayomi.anilist.synced") || "{}"); } catch (e) { }
+    if ((synced[mkey] || 0) >= entry.episodeNumber) return;
+    const status = entry.completed ? "COMPLETED" : "CURRENT";
+    await anilistGraphql(
+      "mutation($id: Int, $p: Int, $st: MediaListStatus) { SaveMediaListEntry(mediaId: $id, progress: $p, status: $st) { id progress } }",
+      { id: mediaId, p: entry.episodeNumber, st: status },
+    );
+    synced[mkey] = entry.episodeNumber;
+    localStorage.setItem("miwayomi.anilist.synced", JSON.stringify(synced));
+  } catch (e) {
+    console.log("[miwayomi] AniList sync failed: " + e.message);
+  }
+}
+
+function connectAniList() {
+  const cid = anilistClientId();
+  if (!cid) { alert(t("anilist.needClientId")); return; }
+  const redirect = encodeURIComponent(location.origin + "/index.html");
+  const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${encodeURIComponent(cid)}&response_type=token&redirect_uri=${redirect}`;
+  window.open(url, "_blank", "width=520,height=720");
+}
+
+function disconnectAniList() {
+  localStorage.removeItem("miwayomi.anilist.token");
+  localStorage.removeItem("miwayomi.anilist.media");
+  localStorage.removeItem("miwayomi.anilist.synced");
+  refreshAniListUi();
+  toast(t("anilist.disconnected"));
+}
+
+async function refreshAniListUi() {
+  const status = $("#anilistStatus");
+  if (!status) return;
+  const cid = anilistClientId();
+  const token = anilistToken();
+  if (!cid) { status.innerHTML = `<span class="anilist-off">${escapeHtml(t("anilist.noClient"))}</span>`; return; }
+  if (!token) { status.innerHTML = `<span class="anilist-off">${escapeHtml(t("anilist.notConnected"))}</span>`; return; }
+  const name = await anilistUsername();
+  status.innerHTML = name
+    ? `<span class="anilist-on">${escapeHtml(t("anilist.connectedAs", name))}</span>`
+    : `<span class="anilist-off">${escapeHtml(t("anilist.tokenInvalid"))}</span>`;
+}
+
+function setAniListSync(v) { localStorage.setItem("miwayomi.anilist.sync", v ? "1" : "off"); }
+function setAniListClientId(v) {
+  localStorage.setItem("miwayomi.anilist.clientId", v);
+  refreshAniListUi();
+}
+
+function handleAniListHash() {
+  const h = location.hash || "";
+  if (!h.includes("access_token=")) return;
+  const params = new URLSearchParams(h.replace(/^#/, ""));
+  const token = params.get("access_token");
+  if (token) {
+    localStorage.setItem("miwayomi.anilist.token", token);
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { location.hash = ""; }
+    refreshAniListUi();
+    toast(t("anilist.connected"));
+  }
+}
+
 /* ---------------- Player ---------------- */
 
 async function openEpisode(encUrl, name, noPush) {
   state.currentView = "player";
   if (!noPush) navPush(() => { if (state.detail) renderDetail(state.detail.type, state.detailObj); });
+  state.currentEncUrl = encUrl;
+  state.currentEpName = name || "";
   const main = $("#content");
   main.innerHTML = `<div class="loading">${escapeHtml(t("player.fetching"))}</div>`;
   try {
@@ -664,6 +994,12 @@ async function openEpisode(encUrl, name, noPush) {
     }
     state.episodes = eps;
     window.__videos = videos;
+    const curEp = (eps || []).find((e) => decodeURIComponent(e.url) === decodeURIComponent(encUrl));
+    state.currentEpNumber = curEp && curEp.episode_number != null ? curEp.episode_number : null;
+    await loadWatchCache();
+
+    const autoNext = localStorage.getItem("miwayomi.autoPlayNext") !== "off";
+    const autoSrc = localStorage.getItem("miwayomi.autoSource") !== "off";
 
     main.innerHTML = `
       <div class="reader-top">
@@ -676,14 +1012,23 @@ async function openEpisode(encUrl, name, noPush) {
           <div class="video-item" style="margin-top:12px">
             <span id="playingLabel">${escapeHtml(t("player.select"))}</span>
             <span id="qualityBtns"></span>
+            <button class="btn-ghost" onclick="restartEpisode()" title="${escapeHtml(t("player.restart"))}" style="font-size:18px">↺</button>
           </div>
+          <div class="player-controls">
+            <label class="pctl"><input type="checkbox" id="autoPlayCb" ${autoNext ? "checked" : ""} onchange="setAutoPlay(this.checked)"> ${escapeHtml(t("player.autoNext"))}</label>
+            <label class="pctl"><input type="checkbox" id="autoSrcCb" ${autoSrc ? "checked" : ""} onchange="setAutoSource(this.checked)"> ${escapeHtml(t("player.autoSource"))}</label>
+          </div>
+          <div id="resumeToast" class="resume-toast hidden"></div>
         </div>
         <div class="player-episodes" id="playerEpisodes"></div>
       </div>`;
 
     renderQuality(videos);
     renderPlayerEpisodes(eps, encUrl);
-    if (videos.length === 1) playVideo(0);
+    if (autoSrc) {
+      playVideo(pickBestVideo(videos));
+      attemptPlay($("#videoPlayer"));
+    } else if (videos.length === 1) playVideo(0);
   } catch (e) {
     main.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
   }
@@ -693,14 +1038,21 @@ function renderQuality(videos) {
   const wrap = $("#qualityBtns");
   if (!wrap) return;
   wrap.innerHTML = videos.map((v, i) =>
-    `<button style="margin-left:6px" onclick="playVideo(${i})">${escapeHtml(v.resolution ? v.resolution + "p" : (v.videoTitle || i + 1))}</button>`).join("");
+    `<button class="qbtn" data-i="${i}" style="margin-left:6px" onclick="playVideo(${i})">${escapeHtml(v.resolution ? v.resolution + "p" : (v.videoTitle || i + 1))}</button>`).join("");
+}
+function setQualityActive(i) {
+  document.querySelectorAll("#qualityBtns .qbtn").forEach((b) => b.classList.toggle("active", Number(b.dataset.i) === i));
 }
 
 function renderPlayerEpisodes(eps, currentEnc) {
   const box = $("#playerEpisodes");
   if (!box) return;
-  box.innerHTML = `<div class="list-title">${escapeHtml(t("detail.episodes"))}</div>` +
-    (eps.length ? eps.map((e, i) => `
+  const list = sortEpisodes(eps || []);
+  const orderLabel = episodeOrder() === "oldest" ? t("player.orderOldest") : t("player.orderNewest");
+  box.innerHTML = `<div class="list-title">${escapeHtml(t("detail.episodes"))}
+      <button class="order-btn" onclick="togglePlayerOrder()" title="${escapeHtml(t("player.orderHint"))}">${escapeHtml(t("player.orderIcon"))} ${escapeHtml(orderLabel)}</button>
+    </div>` +
+    (list.length ? list.map((e, i) => `
       <div class="player-episode ${decodeURIComponent(currentEnc) === decodeURIComponent(e.url) ? "active" : ""}" onclick="openEpisode('${encodeURIComponent(e.url)}','${escapeHtml(e.name)}',true)">
         <span class="pe-num">E${e.episode_number ?? i + 1}</span><span>${escapeHtml(e.name)}</span>
       </div>`).join("") : `<div class="empty">${escapeHtml(t("detail.noEpisodes"))}</div>`);
@@ -720,6 +1072,9 @@ function playVideo(i) {
   if (label) label.textContent = t("player.playing", v.videoTitle || t("player.video"));
   const video = $("#videoPlayer");
   if (!video) return;
+  setQualityActive(i);
+  bindVideoEvents(video);
+  maybeResume(video);
   const videoUrl = v.videoUrl || "";
   const isHls = videoUrl.includes(".m3u8");
   const isDash = videoUrl.includes(".mpd");
@@ -783,10 +1138,30 @@ function openSettings() {
         <div class="st-lbl"><b>${escapeHtml(t("settings.extensionsDir"))}</b><span>${escapeHtml(t("settings.extensionsDirHint"))}</span></div>
       </div>
     </div>
+    <div class="settings-group">
+      <h4>${escapeHtml(t("anilist.title"))}</h4>
+      <div class="setting-row">
+        <div class="st-lbl"><b>${escapeHtml(t("anilist.clientId"))}</b><span>${escapeHtml(t("anilist.clientIdHint", location.origin + "/index.html"))}</span></div>
+        <input id="anilistClientId" type="text" value="${escapeHtml(anilistClientId())}" placeholder="12345" onchange="setAniListClientId(this.value)" style="max-width:180px">
+      </div>
+      <div class="setting-row">
+        <div class="st-lbl"><b>${escapeHtml(t("anilist.status"))}</b><span id="anilistStatus">…</span></div>
+        <span>
+          ${anilistToken()
+            ? `<button onclick="disconnectAniList()">${escapeHtml(t("anilist.disconnect"))}</button>`
+            : `<button class="btn-primary" onclick="connectAniList()">${escapeHtml(t("anilist.connect"))}</button>`}
+        </span>
+      </div>
+      <div class="setting-row">
+        <div class="st-lbl"><b>${escapeHtml(t("anilist.sync"))}</b><span>${escapeHtml(t("anilist.syncHint"))}</span></div>
+        <input type="checkbox" id="anilistSyncCb" ${anilistSyncOn() ? "checked" : ""} onchange="setAniListSync(this.checked)">
+      </div>
+    </div>
     <div class="pref-actions">
       <button class="btn-primary" onclick="closeModal()">${escapeHtml(t("common.close"))}</button>
     </div>`;
   openModal();
+  refreshAniListUi();
   fetch(`${api}/health`).then((r) => r.json()).then((d) => {
     const el = $("#setHealth");
     if (el) el.textContent = `${d.service} · manga ${d.mangaSources} · anime ${d.animeSources}`;
@@ -1234,6 +1609,7 @@ function dismissUpdate() {
 /* ---------------- Boot ---------------- */
 
 (async function boot() {
+  handleAniListHash();
   await loadI18n(currentLang());
   const sel = $("#langSelect");
   if (sel) sel.value = currentLang();

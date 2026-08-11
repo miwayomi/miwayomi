@@ -61,8 +61,10 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
 - **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
 - **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP): live screenshots, clicks/keys, cookie capture (`cf_clearance`) and fast reuse.
 - **FlareSolverr** integration (client `/v1` + interceptor), optional.
-- **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites and reading progress.
+- **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites, reading progress, and anime watch history.
 - **Source settings via API**: exposes the preferences each extension declares (language, quality, domain, ...).
+- **Anime player with history**: invert episode order (newest/oldest), auto-play the next episode, auto-select the best video source, and a **"Continue watching"** home row that resumes exactly where you left off (progress stored in SQLite).
+- **AniList sync (optional)**: connect your own AniList account from Settings to push your watched-episode progress automatically.
 - **Extension manager** in the WebUI: install/uninstall from any repository, with status and per-extension grouping.
 - **Multilingual WebUI**: one JSON file per language in `lang/` (add a file to add a language).
 - Offline built-in demo source (no network, no configuration) for testing the pipeline.
@@ -257,6 +259,9 @@ How it works internally:
 | `GET /api/v1/sources/{id}/prefs` · `POST /api/v1/sources/{id}/prefs` | Read / save source preferences |
 | `GET /api/v1/favorites` · `POST /api/v1/favorites` · `DELETE /api/v1/favorites?sourceId=&url=` | Favorites |
 | `GET /api/v1/favorites/check?sourceId=&url=` · `POST /api/v1/favorites/progress` | Favorite status and reading progress |
+| `GET /api/v1/watch` | Anime watch history ("Continue watching") |
+| `POST /api/v1/watch` | Save/update anime watch progress |
+| `DELETE /api/v1/watch?sourceId=&animeUrl=&epUrl=` | Remove a watch-history entry |
 
 ## How it works
 

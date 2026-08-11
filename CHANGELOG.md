@@ -2,6 +2,25 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.6] - 2026-08-11
+
+### Added
+- **Watch history in the database**: anime watch progress is now persisted
+  server-side in SQLite (new `watch_history` table and `/api/v1/watch` API),
+  so "Continue watching" and exact resume positions survive restarts and work
+  from any browser.
+- **AniList sync**: connect your own AniList account from Settings (OAuth) and
+  miwayomi pushes your watched-episode progress to AniList automatically
+  (with an option to toggle it).
+- **Player improvements**:
+  - Invert episode order button (newest/oldest) in the detail view and the
+    player episode list.
+  - Auto-play the next episode when the current one finishes (toggleable).
+  - Auto-select the best video source automatically (toggleable).
+  - ↺ Restart button to reset the current episode.
+
+---
+
 ## [v0.2.5] - 2026-08-11
 
 ### Fixed

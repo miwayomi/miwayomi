@@ -86,5 +86,6 @@ fun Application.registerApi() {
     registerExtensionApi()
     registerSourcePrefsApi()
     registerFavoritesApi()
+    registerWatchApi()
     registerUpdateApi()
 }
