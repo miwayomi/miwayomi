@@ -24,12 +24,23 @@ import java.util.jar.JarOutputStream
 
 object JarFixer {
 
+    private const val FIX_MARKER = "META-INF/miwayomi-jarfixed"
+
+    /** True if [jar] was already processed by [fixStackmapFrames]. */
+    fun isFixed(jar: File): Boolean = try {
+        JarFile(jar).use { jf -> jf.getJarEntry(FIX_MARKER) != null }
+    } catch (e: Exception) {
+        false
+    }
+
     fun fixStackmapFrames(jar: File) {
         val appLoader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
 
+        @Suppress("UNUSED_VARIABLE")
         val loader = java.net.URLClassLoader(arrayOf(jar.toURI().toURL()), appLoader)
         try {
             val classes = LinkedHashMap<String, ClassNode>()
+            val originalBytes = HashMap<String, ByteArray>()
             val others = mutableListOf<Pair<String, ByteArray>>()
             val needInit = mutableSetOf<Pair<String, String>>()
             JarFile(jar).use { jf ->
@@ -43,6 +54,7 @@ object JarFixer {
                             val cn = ClassNode()
                             ClassReader(data).accept(cn, 0)
                             classes[entry.name] = cn
+                            originalBytes[entry.name] = data
                         } catch (_: Throwable) {
                             others.add(entry.name to data)
                         }
@@ -52,11 +64,27 @@ object JarFixer {
                 }
             }
 
+            // Snapshot each class's plain serialization before any fix, so we can
+            // tell exactly which classes the fixers changed.
+            val plainBefore = HashMap<String, ByteArray?>()
+            classes.forEach { (name, cn) ->
+                try {
+                    plainBefore[name] = ClassWriter(0).apply { cn.accept(this) }.toByteArray()
+                } catch (_: Throwable) {
+                    plainBefore[name] = null
+                }
+            }
+
             classes.values.forEach { cn ->
+                // Only fix the `invokespecial <init>` owner of `new T; dup; ...;
+                // invokespecial <init>` constructions. This is the corruption dex2jar
+                // introduces, and it is the only rewrite that is safe for every jar:
+                // a clean jar has no such mismatch (the JVM verifier requires the
+                // <init> owner to be the constructed type), so it is left untouched.
+                // The other fixers (constructor super-call, phantom `new`, field-new
+                // inference) proved too aggressive: they rewrite valid bytecode in
+                // some extensions and break them with VerifyError.
                 fixWrongInitOwner(cn, needInit, classes)
-                fixConstructorSuperCall(cn, needInit)
-                fixPhantomNew(cn, needInit)
-                fixWrongFieldNew(cn, needInit, classes)
             }
 
             var changed = true
@@ -90,44 +118,74 @@ object JarFixer {
                 }
             }
 
-            JarOutputStream(FileOutputStream(jar)).use { jos ->
-                classes.forEach { (name, cn) ->
-                    val bytes = try {
-                        val cw = object : ClassWriter(ClassWriter.COMPUTE_FRAMES) {
-                            override fun getCommonSuperClass(t1: String, t2: String): String = try {
-                                val c1 = Class.forName(t1.replace('/', '.'), false, loader)
-                                val c2 = Class.forName(t2.replace('/', '.'), false, loader)
-                                when {
-                                    c1.isAssignableFrom(c2) -> t1
-                                    c2.isAssignableFrom(c1) -> t2
-                                    else -> {
-                                        var sup: Class<*>? = c1
-                                        while (sup != null && !sup.isAssignableFrom(c2)) {
-                                            sup = sup.superclass
-                                        }
-                                        sup?.name?.replace('.', '/') ?: "java/lang/Object"
-                                    }
-                                }
-                            } catch (_: Throwable) {
-                                "java/lang/Object"
-                            }
-                        }
-                        cn.accept(cw)
-                        cw.toByteArray()
+            // Only classes the fixers actually changed need new stack map frames.
+            // Recomputing frames for untouched classes can break them (VerifyError),
+            // so keep their original bytes.
+            val dirty = HashSet<String>()
+            classes.forEach { (name, cn) ->
+                val before = plainBefore[name]
+                if (before != null) {
+                    val after = try {
+                        ClassWriter(0).apply { cn.accept(this) }.toByteArray()
                     } catch (_: Throwable) {
-                        val cw = ClassWriter(0)
-                        cn.accept(cw)
-                        cw.toByteArray()
+                        null
                     }
-                    jos.putNextEntry(JarEntry(name))
-                    jos.write(bytes)
-                    jos.closeEntry()
+                    if (after == null || !before.contentEquals(after)) {
+                        dirty.add(name)
+                    }
                 }
-                others.forEach { (name, data) ->
-                    jos.putNextEntry(JarEntry(name))
-                    jos.write(data)
+            }
+
+            val tmp = File(jar.parentFile, jar.name + ".tmp")
+            try {
+                JarOutputStream(FileOutputStream(tmp)).use { jos ->
+                    // Mark the jar as fixed so this only runs once per extension.
+                    jos.putNextEntry(JarEntry(FIX_MARKER))
+                    jos.write("fixed\n".toByteArray())
                     jos.closeEntry()
+                    classes.forEach { (name, cn) ->
+                        val bytes = if (!dirty.contains(name)) {
+                            // Unchanged class: keep the original bytes untouched.
+                            originalBytes[name]
+                        } else {
+                            // The fixer only changes the <init> owner of `new T; dup; ...`
+                            // constructions. Stack map frames store those receivers as
+                            // uninitialized offsets (not the owner's name), so they stay
+                            // valid: preserve the original frames (ClassWriter(0)) instead
+                            // of recomputing them. COMPUTE_FRAMES resolves types through
+                            // the classloader and can emit wrong frames for otherwise-fine
+                            // extensions (VerifyError on load).
+                            ClassWriter(0).apply { cn.accept(this) }.toByteArray()
+                        }
+                        if (bytes != null) {
+                            jos.putNextEntry(JarEntry(name))
+                            jos.write(bytes)
+                            jos.closeEntry()
+                        }
+                    }
+                    others.forEach { (name, data) ->
+                        jos.putNextEntry(JarEntry(name))
+                        jos.write(data)
+                        jos.closeEntry()
+                    }
                 }
+                // Replace the original jar only after the fixed copy was written
+                // successfully, so a failure never corrupts the extension jar.
+                try {
+                    java.nio.file.Files.move(
+                        tmp.toPath(), jar.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    )
+                } catch (_: Exception) {
+                    java.nio.file.Files.move(
+                        tmp.toPath(), jar.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    )
+                }
+            } catch (e: Exception) {
+                tmp.delete()
+                throw e
             }
         } catch (e: Exception) {
             System.err.println("fixStackmapFrames error in $jar: $e")
@@ -153,12 +211,14 @@ object JarFixer {
                             val newInsn = pending.pop()
                             val t = newInsn.desc
                             if (n.owner != t) {
-                                val real = realTypeOf(classes, t, n.owner)
-                                if (real != null) {
-                                    newInsn.desc = real
-                                    n.owner = real
-                                    needInit.add(real to n.desc)
-                                }
+                                // The receiver of an `invokespecial <init>` that follows a
+                                // `new T; dup` is an object of type T, so T must own the
+                                // <init> (the JVM verifier enforces this). dex2jar sometimes
+                                // rewrites the owner to an unrelated class (e.g. ArrayList ->
+                                // Filter.Select, Pair -> Filter subclass); the constructed
+                                // type is always the correct owner.
+                                n.owner = t
+                                needInit.add(t to n.desc)
                             }
                         }
                     }
@@ -173,15 +233,31 @@ object JarFixer {
         val superName = cn.superName
         cn.methods.filter { it.name == "<init>" }.forEach { m ->
             val insns = m.instructions
+            // Track `new T; dup` constructions so we don't mistake a constructor
+            // call on a freshly allocated object for the `this(...)`/`super(...)` call.
+            val pending = java.util.ArrayDeque<TypeInsnNode>()
+            var pendingDup: TypeInsnNode? = null
             var i = 0
             while (i < insns.size()) {
                 val n = insns[i]
-                if (n is MethodInsnNode && n.opcode == Opcodes.INVOKESPECIAL && n.name == "<init>") {
-                    if (n.owner != cn.name && n.owner != superName) {
-                        n.owner = superName
-                        needInit.add(superName to n.desc)
+                when {
+                    n is TypeInsnNode && n.opcode == Opcodes.NEW -> pendingDup = n
+                    n is InsnNode && n.opcode == Opcodes.DUP && pendingDup != null -> {
+                        pending.push(pendingDup)
+                        pendingDup = null
                     }
-                    break
+                    n is MethodInsnNode && n.opcode == Opcodes.INVOKESPECIAL && n.name == "<init>" -> {
+                        if (pending.isEmpty()) {
+                            // Real `this(...)`/`super(...)` call: must point at this class
+                            // or its superclass.
+                            if (n.owner != cn.name && n.owner != superName) {
+                                n.owner = superName
+                                needInit.add(superName to n.desc)
+                            }
+                            break
+                        }
+                        pending.pop()
+                    }
                 }
                 i++
             }
@@ -271,12 +347,17 @@ object JarFixer {
                                 val targetInJar = classes.containsKey(target + ".class")
                                 val newInJar = classes.containsKey(n.desc + ".class")
                                 val assignable = isSubclassOf(classes, n.desc, target)
-                                // only touch bytecode that is already invalid (the value is not assignable to the field/use)
+                                // Only rewrite `new` of classes defined INSIDE the jar:
+                                // dex2jar mangles the names of in-jar classes. Never rewrite
+                                // `new` of an external class (ArrayList, Pair, String, ...) —
+                                // those are valid constructions, and rewriting them (e.g. to
+                                // a Filter subclass) breaks the extension with VerifyError or
+                                // InstantiationError. The `new`-vs-<init> owner mismatch is
+                                // handled by fixWrongInitOwner instead.
                                 val fix = !assignable && (
                                     targetInJar ||
-                                    isSubclassOf(classes, target, n.desc) ||
-                                    newInJar
-                                )
+                                    isSubclassOf(classes, target, n.desc)
+                                ) && newInJar
                                 if (fix) {
                                     n.desc = target
                                     init.owner = target

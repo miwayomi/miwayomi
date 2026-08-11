@@ -139,12 +139,9 @@ fun Application.registerExtensionApi() {
             val req = call.receive<InstallRequestDto>()
             val apkName = req.apk
 
-            val url = if (apkName.startsWith("http://") || apkName.startsWith("https://")) {
-                apkName
-            } else {
-                val repoBase = req.repoUrl.substringBeforeLast('/')
-                "$repoBase/apk/$apkName"
-            }
+            val isAbsolute = apkName.startsWith("http://") || apkName.startsWith("https://")
+            val repoBase = if (isAbsolute) null else req.repoUrl.substringBeforeLast('/')
+            val url = if (isAbsolute) apkName else "$repoBase/apk/$apkName"
             val destName = url.substringAfterLast('/')
             if (!destName.endsWith(".apk", ignoreCase = true)) {
                 return@post call.respond(HttpStatusCode.BadRequest, InstallResultDto(ok = false, error = "invalid apk name"))
@@ -167,6 +164,37 @@ fun Application.registerExtensionApi() {
             if (!tmp.renameTo(dest)) {
                 dest.writeBytes(bytes)
                 tmp.delete()
+            }
+
+            // Best-effort: some repos also publish a desktop JVM jar with the
+            // same base name. Using it avoids the dex2jar DEX->JVM conversion,
+            // which corrupts R8 output (bad `invokespecial <init>` owners) and
+            // breaks the extension with a VerifyError. If the repo has no jar,
+            // fall back to conversion.
+            if (repoBase != null) {
+                val jarName = destName.substringBeforeLast('.').plus(".jar")
+                val jarUrl = "$repoBase/jar/$jarName"
+                val jarResponse = try {
+                    client.newCall(GET(jarUrl)).execute()
+                } catch (_: Throwable) {
+                    null
+                }
+                if (jarResponse != null) {
+                    if (jarResponse.isSuccessful) {
+                        val jarBytes = jarResponse.body.bytes()
+                        jarResponse.close()
+                        val jarDest = File(extensionsDir, jarName)
+                        val jarTmp = File(extensionsDir, jarName + ".part")
+                        jarTmp.writeBytes(jarBytes)
+                        if (!jarTmp.renameTo(jarDest)) {
+                            jarDest.writeBytes(jarBytes)
+                            jarTmp.delete()
+                        }
+                        println("[miwayomi] downloaded desktop jar $jarName for $destName")
+                    } else {
+                        jarResponse.close()
+                    }
+                }
             }
 
             val loaded = try {

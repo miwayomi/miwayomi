@@ -2,6 +2,28 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.5] - 2026-08-11
+
+### Fixed
+- **Search HTTP 500 on some extensions**: extension jars produced by the DEX→JVM
+  conversion (dex2jar) could contain an invalid `invokespecial <init>` owner on
+  `new T; dup; ...` constructions, making the JVM verifier reject the filter
+  classes (`VerifyError`) and every search return HTTP 500. The server now
+  repairs the corrupted constructor owner to the constructed type, applies the
+  repair to every extension jar on first load (tracked via a marker entry), and
+  preserves the original stack map frames so valid classes are never rewritten.
+- **Manga extensions from repos that publish desktop JVM jars** now use those
+  jars directly instead of converting the APK, avoiding the conversion
+  corruption entirely.
+- **Manga extension search**: removed `IgnoreGzipInterceptor` and
+  `BrotliInterceptor` from the default OkHttp client (newer manga extensions
+  require a default client without them) and upgraded OkHttp to 5.4.0
+  (adding `okhttp-zstd`) so `okhttp3.CompressionInterceptor` is available.
+- **Newer manga extension compatibility**: added the `memo` field to
+  `SManga`/`SChapter` and their implementations.
+
+---
+
 ## [v0.2.4] - 2026-08-10
 
 ### Fixed

@@ -16,7 +16,7 @@ import java.nio.file.StandardCopyOption
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
 
-const val MIWAYOMI_VERSION = "0.2.4"
+const val MIWAYOMI_VERSION = "0.2.5"
 const val MIWAYOMI_REPO = "miwayomi/miwayomi"
 
 @Serializable

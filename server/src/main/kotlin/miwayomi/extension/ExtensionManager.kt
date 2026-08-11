@@ -163,7 +163,16 @@ class ExtensionManager(
         if (!jar.exists() || jar.lastModified() < apk.lastModified()) {
             println("[miwayomi] converting ${apk.name} (dex -> jar)...")
             PackageTools.dex2jar(apk, jar)
+        }
 
+        // dex2jar output (and repo-published jars) can contain invalid
+        // `invokespecial <init>` owners (e.g. `new ArrayList; ...; invokespecial
+        // Filter$Select.<init>`), which throws VerifyError when the source builds
+        // its filters during search. Apply the bytecode fix to every jar that
+        // hasn't been fixed yet (marked via META-INF/miwayomi-jarfixed) so the
+        // corruption never reaches the classloader.
+        if (!JarFixer.isFixed(jar)) {
+            println("[miwayomi] fixing bytecode of ${jar.name}...")
             JarFixer.fixStackmapFrames(jar)
         }
 
