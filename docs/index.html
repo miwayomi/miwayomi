@@ -97,25 +97,37 @@
   </div>
 
   <h2>Download</h2>
-  <div class="card">
-    <h3>Runnable JAR — one file, any OS</h3>
-    <p>Grab the latest release: a single cross-platform JAR. You only need <b>JDK 21</b>.</p>
-    <p style="margin-top:12px"><a class="btn" href="https://github.com/miwayomi/miwayomi/releases" target="_blank" rel="noopener">⬇ Download miwayomi (Releases)</a></p>
-    <p style="margin-top:10px;color:var(--muted);font-size:13px">The JAR is a snapshot of the engine — it ships no extensions or content. You install sources from the web UI.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>🖥️ Windows installer</h3>
+      <p>Native setup — Start Menu &amp; desktop shortcut. Optionally bundles a JRE for a fully standalone install.</p>
+      <p style="margin-top:12px"><a class="btn" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-setup.exe" target="_blank" rel="noopener">⬇ Download installer (.exe)</a></p>
+    </div>
+    <div class="card">
+      <h3>🐧 🍎 Runnable JAR — any OS</h3>
+      <p>One cross-platform file; you only need <b>JDK 21</b>.</p>
+      <p style="margin-top:12px"><a class="btn" href="https://github.com/miwayomi/miwayomi/releases/latest/download/miwayomi-all.jar" target="_blank" rel="noopener">⬇ Download JAR</a></p>
+      <p style="margin-top:10px;color:var(--muted);font-size:13px">The JAR ships no extensions or content — you install sources from the web UI.</p>
+    </div>
   </div>
+  <p style="color:var(--muted);font-size:13px;margin-top:10px">All releases on <a href="https://github.com/miwayomi/miwayomi/releases" target="_blank" rel="noopener">GitHub</a>. The app <b>auto-updates</b> — it downloads new releases and applies them on restart.</p>
 
-  <h2>Run it on any OS</h2>
+  <h2>Run it</h2>
   <div class="card">
-    <h3>Linux / macOS</h3>
+    <h3>Any OS — one command</h3>
     <p style="font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#14141a;color:#e8e8f0;border-radius:10px;padding:12px 14px;margin:10px 0">
-      java -jar miwayomi-all.jar --data ./data --port 4567
+      java -jar miwayomi-all.jar
     </p>
-    <h3>Windows (PowerShell / CMD)</h3>
+    <p>It picks a <b>free port</b>, starts, and opens your default browser.</p>
+    <h3>Desktop app window (recommended)</h3>
     <p style="font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#14141a;color:#e8e8f0;border-radius:10px;padding:12px 14px;margin:10px 0">
-      java -jar miwayomi-all.jar --data %cd%\data --port 4567
+      ./miwayomi        <span style="color:#6b7280"># macOS / Linux</span><br>
+      miwayomi.bat      <span style="color:#6b7280"># Windows</span>
     </p>
-    <p>FlareSolverr is <b>enabled by default</b> at <code>http://127.0.0.1:8191</code>. If it is not running, Cloudflare challenges fall back to the manual modal.</p>
-    <p>Open <b>http://localhost:4567</b>. Full build, run, and extension guides are in the <a href="documentation.html">documentation</a>.</p>
+    <p>Opens a dedicated Chrome/Edge <code>--app</code> window and stops the server when you close it.</p>
+    <p>Force a specific port with <code>--port 4567</code>; use <code>--no-open</code> for headless/server use. Open <b>http://localhost:4567</b> once running.</p>
+    <p>FlareSolverr is <b>enabled by default</b> at <code>http://127.0.0.1:8191</code>; if it is not running, Cloudflare challenges fall back to the manual modal.</p>
+    <p>Full build, run, and extension guides are in the <a href="documentation.html">documentation</a>.</p>
   </div>
 
   <div class="note">
