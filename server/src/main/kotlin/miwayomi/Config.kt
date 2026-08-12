@@ -8,7 +8,6 @@ data class ServerConfig(
     val port: Int = 0,
     val dataDir: File = File("data"),
     val flareSolverrUrl: String? = "http://127.0.0.1:8191",
-    val chromePath: String? = null,
     val openBrowser: Boolean = true,
 ) {
     val extensionsDir: File get() = File(dataDir, "extensions")
@@ -27,10 +26,6 @@ fun parseArgs(args: Array<String>): ServerConfig {
             "--flaresolverr", "-f" -> {
                 val url = args.getOrNull(i + 1)?.takeIf { it.isNotBlank() }
                 config = config.copy(flareSolverrUrl = url).also { i++ }
-            }
-            "--chrome" -> {
-                val path = args.getOrNull(i + 1)?.takeIf { it.isNotBlank() }
-                config = config.copy(chromePath = path).also { i++ }
             }
             "--no-open" -> config = config.copy(openBrowser = false)
         }

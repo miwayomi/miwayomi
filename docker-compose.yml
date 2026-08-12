@@ -1,0 +1,39 @@
+services:
+  miwayomi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: miwayomi/miwayomi:latest
+    container_name: miwayomi
+    ports:
+      - "4567:4567"
+    volumes:
+      - miwayomi-data:/data
+    environment:
+      # Point miwayomi at the FlareSolverr sidecar (service name on the
+      # compose network). Set to "" to disable Cloudflare solving.
+      - FLARESOLVERR_URL=http://flaresolverr:8191
+      # - JAVA_OPTS=-Xmx768m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC
+    depends_on:
+      flaresolverr:
+        condition: service_healthy
+    restart: unless-stopped
+
+  flaresolverr:
+    build:
+      context: .
+      dockerfile: docker/flaresolverr.Dockerfile
+    image: miwayomi/flaresolverr:latest
+    container_name: flaresolverr
+    ports:
+      - "8191:8191"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  miwayomi-data:

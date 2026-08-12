@@ -56,26 +56,6 @@
   <div class="modal-box" id="modalBox"></div>
 </div>
 
-<div id="cfModal" class="modal hidden" onclick="if(event.target===this)cfClose()">
-  <div class="modal-box cf-box">
-    <h3 style="margin-top:0" data-i18n="cf.title">Resolve Cloudflare challenge</h3>
-    <p class="cf-help" data-i18n-html="cf.help">This site asks to solve an anti-bot captcha. In the screenshot: if a
-      <b>&#8220;I&#8217;m not a robot&#8221; checkbox</b> appears, click on it; if the <b>&#8220;Security verification&#8221; spinner</b>
-      appears, wait a few seconds for it to pass. When the screenshot shows the real site (or content loads),
-      press <b>&#8220;&#10003; I&#8217;ve solved it&#8221;</b>.</p>
-    <div class="cf-stage" id="cfStage">
-      <img id="cfShot" alt="Challenge screenshot" class="cf-shot">
-    </div>
-    <div class="cf-url" id="cfUrl" data-i18n="cf.urlLoading">Loading browser...</div>
-    <div class="cf-actions">
-      <button class="btn-primary" onclick="cfFinish()" data-i18n="cf.done">✓ I've solved it</button>
-      <button onclick="cfKey('tab')" data-i18n="cf.tab">Tab</button>
-      <button onclick="cfKey('enter')" data-i18n="cf.enter">Enter</button>
-      <button onclick="cfClose()" data-i18n="cf.cancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 <script src="/app.js"></script>

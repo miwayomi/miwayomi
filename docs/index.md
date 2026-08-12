@@ -121,8 +121,8 @@ miwayomi was built around a handful of principles that shaped every file:
    favorites, reading progress, installed extensions, and your repository URLs
    live in SQLite.
 6. **Respect for the sites.** The proxy forwards the exact headers each source
-   needs. If a site is behind Cloudflare, you resolve the challenge manually —
-   your browser, your decision.
+   needs. If a site is behind Cloudflare, an optional FlareSolverr sidecar
+   resolves the challenge automatically.
 
 ---
 
@@ -177,7 +177,6 @@ flowchart TB
         API["REST API (api/)"]
         WEB["WebUI (resources/webui/)"]
         EXT["Extension pipeline (extension/)"]
-        CF["Cloudflare helper (cf/)"]
         BIN["Built-in sources (builtin/)"]
     end
     subgraph CORE["core-common/ (ported network core)"]
@@ -208,7 +207,7 @@ flowchart TB
 | `android-compat/` | Minimal Android shim: the `android.*`/`androidx.*` classes extensions reference, plus the `android.jar` stub used at build time. |
 | `core-common/` | The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine. |
 | `source-api/` | The Aniyomi source API compiled for the JVM: source interfaces and models that extensions implement. |
-| `server/` | The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI. |
+| `server/` | The Ktor application: extension pipeline, source managers, REST API, streaming proxy, WebUI. |
 | `data/` | Runtime data: `data/extensions/*.apk` (+ converted or repo-published `.jar`), source preferences, SQLite cache. |
 
 ---
@@ -223,7 +222,7 @@ you're about to change something.
 ```
 server/src/main/kotlin/miwayomi/
 ├── Main.kt                 Entry point: parses args, wires DI, starts Ktor.
-├── Config.kt               ServerConfig + CLI parsing (--port, --data, --flaresolverr, --chrome...).
+├── Config.kt               ServerConfig + CLI parsing (--port, --data, --flaresolverr, ...).
 ├── di/
 │   ├── AppModule.kt        Injekt module: registers managers, NetworkHelper, ExtensionManager...
 │   └── ConfigHolder.kt     Holds the parsed config for DI (set before Injekt loads).
@@ -244,9 +243,6 @@ server/src/main/kotlin/miwayomi/
 │   ├── DemoSource.kt       An offline demo manga source (returns empty catalogs,
 │   │                       no network) — a compact reference for the API shape.
 │   └── MockCfSource.kt     A test source that simulates a Cloudflare challenge.
-├── cf/
-│   ├── CfBrowser.kt        Controls the bundled headless Chrome for manual resolution.
-│   └── CdpClient.kt        Chrome DevTools Protocol client (WebSocket + JSON-RPC).
 └── api/
     ├── ApiRoutes.kt        Thin root: plugins (JSON, status pages), static WebUI,
     │                       /health, /sources, and registers all sub-routers.
@@ -261,7 +257,6 @@ server/src/main/kotlin/miwayomi/
     │                       repo JVM jars)/uninstall.
     ├── SourcePrefsRoutes.kt  GET/POST source preferences.
     ├── FavoritesRoutes.kt  Favorites + last-read progress.
-    ├── CfRoutes.kt         Manual Cloudflare modal endpoints (start/shot/click/key/finish).
     ├── ApiHelpers.kt       Shared helpers (source lookup, required params, 404s).
     ├── Dtos.kt             All @Serializable response models.
     ├── Mappers.kt          Converters from source models to DTOs.
@@ -276,7 +271,7 @@ core-common/src/main/kotlin/eu/kanade/tachiyomi/network/
 ├── JvmCookieJar.kt         Persistent cookie jar backed by SQLite (survives restarts).
 ├── SqliteStore.kt          SQLite access: kv_store, cookies, favorites, watch history, and extensions tables.
 ├── CookieCodec.kt          Cookie ↔ stored-row (de)serialization.
-├── CfResolvedUa.kt         Persists "host → Chrome UA" for resolved Cloudflare hosts.
+├── CfResolvedUa.kt         Persists "host → browser UA" for resolved Cloudflare hosts.
 ├── CloudflareChallengeException.kt  Signal thrown when a challenge is detected.
 ├── FlareSolverr.kt         Optional auto-solver client (FlareSolverr /v1).
 ├── JavaScriptEngine.kt     GraalJS-backed JS engine (QuickJs/Duktape stand-ins).
@@ -288,7 +283,7 @@ core-common/src/main/kotlin/eu/kanade/tachiyomi/network/
 ├── NetworkPreferences.kt   Preference wiring for the network stack.
 └── interceptor/
     ├── CloudflareInterceptor.kt      Detects 403/429/503 challenges, tries FlareSolverr,
-    │                                 or throws CloudflareChallengeException (→ manual modal).
+    │                                 or throws CloudflareChallengeException (→ configure FlareSolverr).
     ├── FixDoubleEncodedJsonInterceptor.kt  Repairs double-encoded JSON request bodies.
     ├── UserAgentInterceptor.kt       Injects the configured User-Agent.
     ├── RateLimitInterceptor.kt, SpecificHostRateLimitInterceptor.kt  Polite throttling.
@@ -428,12 +423,6 @@ Base URL: `http://<host>:4567/api/v1` — JSON in, JSON out.
 | `POST` | `/extensions/repos` | Save the user's repository URLs `{repos:[...]}` (persisted). |
 | `POST` | `/extensions/install` | Install `{repoUrl, apk}` (registered in the database). |
 | `POST` | `/extensions/uninstall` | Uninstall `{pkg}`. |
-| `GET` | `/cf/start?url=` | Open the headless browser for a manual challenge. |
-| `GET` | `/cf/shot` | Live screenshot of the challenge. |
-| `GET` | `/cf/url` | Current URL in the browser. |
-| `POST` | `/cf/click` | Forward a click `{x,y}`. |
-| `POST` | `/cf/key` | Forward a key press `{key}`. |
-| `POST` | `/cf/finish` | Capture cookies and close the browser. |
 
 ### Examples
 
@@ -520,7 +509,6 @@ with:
   restart button per episode.
 - **AniList sync** — connect your own AniList account in Settings to push your
   watched-episode progress automatically.
-- **Cloudflare modal** — solves challenges by hand with a live headless browser.
 - **i18n** — English and Spanish out of the box; add a file in `lang/` for more.
 
 ---
@@ -530,8 +518,23 @@ with:
 ### Requirements
 
 - **JDK 21** (Temurin recommended). Gradle downloads itself via the wrapper.
-- Chrome/Chromium if you want to solve Cloudflare challenges manually
-  (the bundled one, or `--chrome <path>`).
+- **FlareSolverr** (optional) to solve Cloudflare challenges automatically.
+
+### Docker (recommended for servers / VPS)
+
+```bash
+docker compose up -d      # builds miwayomi + FlareSolverr (from source, in a venv)
+```
+
+- WebUI/API: `http://localhost:4567` · FlareSolverr: `http://localhost:8191`
+- Persistent data (SQLite, extensions, cookies) lives in the named volume
+  `miwayomi-data`.
+- The `Dockerfile` builds the fat JAR with a JDK stage and runs it with a slim
+  **JRE** (no JDK, no browser). FlareSolverr is built from source inside a
+  Python **virtualenv** (`docker/flaresolverr.Dockerfile`) and bundles its own
+  headless Chromium engine — required by FlareSolverr, not part of miwayomi.
+- Tune JVM memory with the `JAVA_OPTS` env var; change the solver URL with
+  `FLARESOLVERR_URL` (empty disables it).
 
 ### Quick start (desktop / JAR)
 
@@ -594,7 +597,6 @@ cd /home/asking/Escritorio/miwayomi
 | `--host`, `-h` | `0.0.0.0` | Listen address. |
 | `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
 | `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
-| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
 | `--no-open` | off | Do not open a browser on start (headless). |
 
 ### Verify
@@ -844,21 +846,21 @@ when the origin sends `application/octet-stream`.
 
 ## Cloudflare challenges
 
-Some sources sit behind Cloudflare's anti-bot. miwayomi gives you **two** ways
-to unlock them:
+Some sources sit behind Cloudflare's anti-bot. miwayomi unlocks them **via
+FlareSolverr** (miwayomi no longer ships or launches its own browser):
 
-1. **Manual (always available, recommended):** the web UI opens a modal with a
-   **live headless Chrome** (via CDP). You solve the challenge by hand, miwayomi
-   captures the cookies (including HttpOnly `cf_clearance`) and — because
-   Cloudflare binds those cookies to a User-Agent — remembers the Chrome UA for
-   that host. Subsequent requests fly through (~1 s).
-2. **FlareSolverr (optional):** if configured, `CloudflareInterceptor` first
-   tries the automatic solver. If it fails or isn't configured, it throws a
-   `CloudflareChallengeException` and the manual modal appears.
+- **FlareSolverr:** `CloudflareInterceptor` detects a challenge and asks the
+  configured FlareSolverr to solve it automatically. On success it captures the
+  cookies (including HttpOnly `cf_clearance`) and — because Cloudflare binds
+  those cookies to a User-Agent — remembers the solver's UA for that host.
+  Subsequent requests fly through (~1 s).
+- If FlareSolverr isn't configured or fails, it throws a
+  `CloudflareChallengeException` and the API returns a clear error telling you
+  to configure FlareSolverr.
 
 The flow, in one sentence: `CloudflareInterceptor` detects a challenge
-(403/429/503 + CF headers or a "Just a moment" body) → auto-solve attempt →
-else manual modal → cookies + UA stored → next request passes.
+(403/429/503 + CF headers or a "Just a moment" body) → FlareSolverr auto-solve →
+cookies + UA stored → next request passes.
 
 ---
 
@@ -897,6 +899,9 @@ Source preferences live in `data/prefs/source_<id>.properties`.
 
 The project is alive and the best way to help is to make it yours:
 
+- **Docker** — done: `Dockerfile` + `docker-compose.yml` (miwayomi on a slim
+  JRE + a FlareSolverr sidecar built from source in a venv); `docker compose
+  up -d` runs it. Publishing the image to GHCR is next.
 - **More web UI views** — filters, in-place sorting, per-chapter page caching.
 - **Per-source JS engines** — isolate QuickJs/Duktape runtimes per extension.
 - **Torrent streaming** — the stub exists in `core-common`; the real thing is
@@ -943,6 +948,5 @@ source), `extension/JarFixer.kt` (the cleverest file), and
 | **JarFixer** | The ASM pass that repairs the bytecode corruption DEX→JVM conversion leaves behind (invalid `<init>` owners), applied automatically on first load. |
 | **Child-first ClassLoader** | Loads the extension's own classes before the parent's. |
 | **HLS / DASH** | Adaptive streaming formats (`.m3u8` / `.mpd`) transparently proxied. |
-| **CDP** | Chrome DevTools Protocol, used for the manual Cloudflare modal. |
-| **FlareSolverr** | Optional service that attempts to auto-solve Cloudflare challenges. |
+| **FlareSolverr** | Service that auto-solves Cloudflare challenges with its own headless browser (run it as a sidecar). |
 | **SQLite store** | Local persistence for cookies, favorites, watch history, installed extensions, and settings. |

@@ -17,7 +17,7 @@ if [ -f /tmp/flaresolverr-src/src/flaresolverr.py ] && [ -x /tmp/fsvenv/bin/pyth
   fi
   FS_ARG="--flaresolverr ${FS_URL}"
 else
-  echo "> FlareSolverr unavailable (no /tmp/flaresolverr-src) -> manual modal only."
+  echo "> FlareSolverr unavailable (no /tmp/flaresolverr-src) -> Cloudflare solving disabled."
   FS_ARG=""
 fi
 

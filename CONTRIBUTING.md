@@ -61,7 +61,7 @@ Look for issues labeled `good first issue` or `help wanted`. If you plan a non-t
 ### Prerequisites
 
 - **JDK 21** (Temurin recommended). Gradle downloads itself via the wrapper — you don't need a system Gradle install.
-- Optional: Chrome/Chromium (or FlareSolverr) if you work on Cloudflare challenge resolution.
+- Optional: FlareSolverr if you work on Cloudflare challenge resolution.
 
 ### Building
 
@@ -84,7 +84,7 @@ The fat JAR is written to `server/build/libs/miwayomi-all.jar`.
 miwayomi.bat     # Windows
 ```
 
-Useful CLI flags: `--port/-p`, `--host/-h`, `--data/-d`, `--flaresolverr/-f`, `--chrome`, `--no-open`. See the README for details.
+Useful CLI flags: `--port/-p`, `--host/-h`, `--data/-d`, `--flaresolverr/-f`, `--no-open`. See the README for details.
 
 ### Project layout
 
@@ -106,7 +106,7 @@ miwayomi/
 Work on a short-lived, descriptive branch off `main`, and open a PR when done:
 
 ```bash
-git checkout -b fix/cloudflare-modal-timeout
+git checkout -b fix/cloudflare-solver-timeout
 # or
 git checkout -b feat/torrent-streaming
 ```
@@ -122,7 +122,7 @@ A `type(scope): subject` prefix keeps history scannable and matches the existing
 ```
 feat(streaming): add DASH segment proxy endpoint
 fix(webui): dedupe catalog results by URL
-docs(readme): document the --chrome flag
+docs(readme): document the FlareSolverr integration
 refactor(extension): extract source-jar loading into its own method
 chore: update gradle wrapper to 8.x
 ```

@@ -758,16 +758,6 @@ button:active { transform: scale(0.97); }
 .pref-check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
 .pref-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
-/* ---------- CF ---------- */
-.cf-box { max-width: 780px; }
-.cf-help { color: var(--muted); font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
-.cf-stage { background: #000; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); text-align: center; min-height: 220px; }
-.cf-shot { max-width: 100%; display: block; margin: 0 auto; cursor: crosshair; }
-.cf-loading { color: var(--muted); padding: 60px 20px; }
-.cf-url { color: var(--muted); font-size: 11px; margin-top: 8px; word-break: break-all; overflow-wrap: anywhere; }
-.cf-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.cf-actions button { flex: 1; min-width: 120px; }
-
 .loading { color: var(--muted); padding: 24px; text-align: center; }
 .error { color: var(--danger); padding: 14px; }
 .fav-progress { color: var(--muted); font-size: 11px; padding: 4px 8px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

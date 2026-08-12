@@ -205,7 +205,7 @@
       <li><b>Generic, not special-cased.</b> The extension pipeline is format-driven: if an APK declares a source, miwayomi can load it.</li>
       <li><b>Chunked, memory-neutral streaming.</b> Media is streamed in 64 KB chunks; nothing is buffered whole into RAM.</li>
       <li><b>Persistence that survives restarts.</b> Cookies, resolved Cloudflare hosts, favorites, and reading progress live in SQLite.</li>
-      <li><b>Respect for the sites.</b> The proxy forwards the exact headers each source needs. Cloudflare challenges are resolved by you — your browser, your decision.</li>
+      <li><b>Respect for the sites.</b> The proxy forwards the exact headers each source needs. Cloudflare challenges are resolved automatically by an optional FlareSolverr sidecar.</li>
     </ul>
 
     <h2 id="requirements">Technical requirements</h2>
@@ -214,8 +214,7 @@
       <tr><td>JDK</td><td>21 (Temurin recommended)</td><td>Gradle downloads itself via the wrapper.</td></tr>
       <tr><td>RAM</td><td>~512 MB heap</td><td>Runs with <code>-Xmx512m</code>; measured ~160–170 MB RSS at rest. Adjust with <code>MIWAYOMI_MEM</code>.</td></tr>
       <tr><td>Disk</td><td>A few hundred MB</td><td>Extensions (.apk + converted .jar), image cache, SQLite DB.</td></tr>
-      <tr><td>Chrome/Chromium</td><td>Optional</td><td>Only needed to solve Cloudflare challenges manually (bundled one or <code>--chrome</code>).</td></tr>
-      <tr><td>FlareSolverr</td><td>Optional</td><td>For automatic Cloudflare solving; falls back to the manual modal.</td></tr>
+      <tr><td>FlareSolverr</td><td>Optional</td><td>Auto-solves Cloudflare challenges (miwayomi ships no browser).</td></tr>
       <tr><td>OS</td><td>Linux / macOS / Windows</td><td>JVM-based; tested on Linux.</td></tr>
       <tr><td>Port</td><td>4567 (default)</td><td>Configurable with <code>--port</code>.</td></tr>
     </table>
@@ -247,7 +246,7 @@
       <tr><td><code>android-compat/</code></td><td>Minimal Android shim: the <code>android.*</code>/<code>androidx.*</code> classes extensions reference, plus the build-time <code>android.jar</code> stub.</td></tr>
       <tr><td><code>core-common/</code></td><td>The network heart: OkHttp wiring, interceptors, cookie jar, SQLite store, FlareSolverr client, JS engine.</td></tr>
       <tr><td><code>source-api/</code></td><td>The Aniyomi source API compiled for the JVM: source interfaces and models extensions implement.</td></tr>
-      <tr><td><code>server/</code></td><td>The Ktor application: extension pipeline, source managers, REST API, streaming proxy, Cloudflare modal, WebUI.</td></tr>
+      <tr><td><code>server/</code></td><td>The Ktor application: extension pipeline, source managers, REST API, streaming proxy, WebUI.</td></tr>
       <tr><td><code>data/</code></td><td>Runtime data: <code>data/extensions/*.apk</code> (+ converted or repo-published <code>.jar</code>), preferences, SQLite + image cache.</td></tr>
     </table>
 
@@ -255,7 +254,7 @@
     <h3>server/ — the application</h3>
     <div class="filetree">server/src/main/kotlin/miwayomi/
 ├── Main.kt                  <span class="cm">Entry point: args, DI, Ktor.</span>
-├── Config.kt                <span class="cm">ServerConfig + CLI (--port, --data, --flaresolverr, --chrome).</span>
+├── Config.kt                <span class="cm">ServerConfig + CLI (--port, --data, --flaresolverr, ...).</span>
 ├── di/                      <span class="cm">AppModule (Injekt) + ConfigHolder.</span>
 ├── source/SourceManagers.kt <span class="cm">Manga/Anime source registries.</span>
 ├── extension/
@@ -264,7 +263,6 @@
 │   ├── JarFixer.kt          <span class="cm">ASM bytecode repair (invalid &lt;init&gt; owners from DEX→JVM); auto-applied on first load.</span>
 │   └── ChildFirstURLClassLoader.kt
 ├── builtin/                 <span class="cm">DemoSource (offline) + MockCfSource.</span>
-├── cf/                      <span class="cm">CfBrowser + CdpClient (manual Cloudflare).</span>
 └── api/
     ├── ApiRoutes.kt         <span class="cm">Plugins, static, /health, /sources, sub-routers.</span>
     ├── MangaRoutes.kt       <span class="cm">Manga catalog endpoints.</span>
@@ -277,7 +275,6 @@
     ├── ExtensionRoutes.kt   <span class="cm">Repo index (JSON + protobuf), install (prefers JVM jars)/uninstall.</span>
     ├── SourcePrefsRoutes.kt <span class="cm">Source preferences GET/POST.</span>
     ├── FavoritesRoutes.kt   <span class="cm">Favorites + last-read progress.</span>
-    ├── CfRoutes.kt          <span class="cm">Manual Cloudflare modal endpoints.</span>
     ├── ApiHelpers.kt        <span class="cm">Shared helpers + chunked proxy stream.</span>
     ├── Dtos.kt / Mappers.kt <span class="cm">@Serializable models + converters.</span>
     └── KeiIndexProto.kt     <span class="cm">Protobuf (index.pb, gzip) repo parser.</span></div>
@@ -288,9 +285,9 @@
 ├── JvmCookieJar.kt          <span class="cm">Persistent cookie jar backed by SQLite.</span>
 ├── SqliteStore.kt           <span class="cm">SQLite: kv_store, cookies, favorites.</span>
 ├── CookieCodec.kt           <span class="cm">Cookie ↔ row (de)serialization.</span>
-├── CfResolvedUa.kt          <span class="cm">Persists host → Chrome UA for resolved hosts.</span>
+├── CfResolvedUa.kt          <span class="cm">Persists host → browser UA for resolved hosts.</span>
 ├── CloudflareChallengeException.kt
-├── FlareSolverr.kt          <span class="cm">Optional auto-solver client.</span>
+├── FlareSolverr.kt          <span class="cm">Auto-solver client (FlareSolverr /v1).</span>
 ├── JavaScriptEngine.kt      <span class="cm">GraalJS (QuickJs/Duktape stand-ins).</span>
 └── interceptor/             <span class="cm">Cloudflare, JSON-fix, UA, rate-limit, uncaught.</span></div>
 
@@ -332,7 +329,6 @@
       <tr><td>GET/POST/DELETE</td><td><code>/favorites…</code></td><td>Favorites + progress.</td></tr>
       <tr><td>GET/POST/DELETE</td><td><code>/watch</code></td><td>Anime watch history (continue watching / resume).</td></tr>
       <tr><td>GET/POST</td><td><code>/extensions/repo|installed|repos|install|uninstall</code></td><td>Extension manager (installed list + repo URLs persisted in the database).</td></tr>
-      <tr><td>GET/POST</td><td><code>/cf/…</code></td><td>Manual Cloudflare resolution.</td></tr>
     </table>
     <pre><span class="c"># Health</span>
 curl http://localhost:4567/api/v1/health
@@ -416,7 +412,7 @@ cp lang/en.json lang/fr.json
     <h3>Requirements</h3>
     <ul>
       <li>JDK 21 (Temurin recommended). Gradle downloads itself via the wrapper.</li>
-      <li>Chrome/Chromium only if you want to solve Cloudflare challenges manually.</li>
+      <li>FlareSolverr (optional) to solve Cloudflare challenges automatically.</li>
     </ul>
     <h3>Quick start (desktop / JAR)</h3>
     <p><code>java -jar miwayomi-all.jar</code> (from the
@@ -442,6 +438,9 @@ cp lang/en.json lang/fr.json
 ./gradlew --stop                <span class="c"># frees the Gradle daemons (RAM)</span>
 ./start.sh                      <span class="c"># uses the distribution if present (headless)</span></pre>
     <p>The JVM runs with <code>-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC</code>. Override RAM with <code>MIWAYOMI_MEM="-Xmx768m" ./start.sh</code>.</p>
+    <h3>Docker (recommended for servers / VPS)</h3>
+    <pre>docker compose up -d      <span class="c"># builds miwayomi + FlareSolverr (from source, in a venv)</span></pre>
+    <p>WebUI/API on <code>http://localhost:4567</code>, FlareSolverr on <code>http://localhost:8191</code>; persistent data (SQLite, extensions, cookies) lives in the named volume <code>miwayomi-data</code>. The <code>Dockerfile</code> builds the fat JAR with a JDK stage and runs it with a slim <b>JRE</b> (no JDK, no browser). FlareSolverr is built from source inside a Python <b>virtualenv</b> (<code>docker/flaresolverr.Dockerfile</code>) and bundles its own headless Chromium engine — required by FlareSolverr, not part of miwayomi. Tune JVM memory with the <code>JAVA_OPTS</code> env var; change the solver URL with <code>FLARESOLVERR_URL</code> (empty disables it).</p>
     <h3>Dev mode</h3>
     <pre>./gradlew :server:run --args="--data ./data --port 4567 --flaresolverr http://127.0.0.1:8191"</pre>
     <h3>CLI options</h3>
@@ -451,7 +450,6 @@ cp lang/en.json lang/fr.json
       <tr><td><code>--host</code>, <code>-h</code></td><td>0.0.0.0</td><td>Listen address.</td></tr>
       <tr><td><code>--data</code>, <code>-d</code></td><td>./data</td><td>Data directory (extensions, prefs, cache).</td></tr>
       <tr><td><code>--flaresolverr</code>, <code>-f</code></td><td>http://127.0.0.1:8191</td><td>FlareSolverr URL (blank disables).</td></tr>
-      <tr><td><code>--chrome</code></td><td>auto</td><td>Chrome/Chromium path for the manual CF modal.</td></tr>
       <tr><td><code>--no-open</code></td><td>off</td><td>Do not open a browser on start (headless).</td></tr>
     </table>
     <h3>Verify</h3>
@@ -512,11 +510,7 @@ cp lang/en.json lang/fr.json
     <p>All proxies stream in 64 KB chunks (no full-file buffering). <code>MimeTypes.kt</code> infers the correct content type even when the CDN sends <code>application/octet-stream</code>. <b>Images are cached to disk</b> (<code>data/cache/images/</code>) so thumbnails, covers, and manga pages load instantly on repeat visits; video is deliberately not cached so Range/206 stays correct.</p>
 
     <h2 id="cloudflare">Cloudflare challenges</h2>
-    <p>Some sources sit behind Cloudflare’s anti-bot. miwayomi gives you two ways to unlock them:</p>
-    <ol>
-      <li><b>Manual (always available):</b> the web UI opens a modal with a live headless Chrome (CDP). You solve the challenge by hand, miwayomi captures the cookies (including HttpOnly <code>cf_clearance</code>) and remembers the Chrome UA for that host. Subsequent requests fly through (~1 s).</li>
-      <li><b>FlareSolverr (optional):</b> tries to solve automatically; if it fails or is absent, the manual modal appears.</li>
-    </ol>
+    <p>Some sources sit behind Cloudflare’s anti-bot. miwayomi unlocks them <b>via FlareSolverr</b> — it no longer ships or launches its own browser. <code>CloudflareInterceptor</code> detects a challenge and asks the configured FlareSolverr to solve it automatically. On success it captures the cookies (including HttpOnly <code>cf_clearance</code>) and — because Cloudflare binds those cookies to a User-Agent — remembers the solver’s UA for that host. Subsequent requests fly through (~1 s). If FlareSolverr isn’t configured or fails, the API returns a clear error telling you to configure it.</p>
 
     <h2 id="persistence">Local persistence</h2>
     <p>Everything is stored in <code>data/cache/miwayomi.db</code> (SQLite, WAL mode):</p>
@@ -544,6 +538,7 @@ cp lang/en.json lang/fr.json
 
     <h2 id="roadmap">Roadmap</h2>
     <ul>
+      <li><b>Docker</b> — done: <code>Dockerfile</code> + <code>docker-compose.yml</code> (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv); <code>docker compose up -d</code> runs it. Publishing the image to GHCR is next.</li>
       <li>More web UI views — filters, in-place sorting, page caching.</li>
       <li>Per-source JS engines — isolate QuickJs/Duktape per extension.</li>
       <li>Torrent streaming — the stub exists in <code>core-common</code>.</li>
@@ -561,7 +556,6 @@ cp lang/en.json lang/fr.json
       <tr><td>JVM jar</td><td>A desktop JVM jar some repositories publish alongside the APK; loaded directly, skipping the DEX conversion.</td></tr>
       <tr><td>JarFixer</td><td>The ASM pass that repairs the bytecode corruption DEX→JVM conversion leaves behind (invalid <code>&lt;init&gt;</code> owners), applied automatically on first load.</td></tr>
       <tr><td>HLS / DASH</td><td>Adaptive streaming formats (<code>.m3u8</code> / <code>.mpd</code>) transparently proxied.</td></tr>
-      <tr><td>CDP</td><td>Chrome DevTools Protocol, used for the manual Cloudflare modal.</td></tr>
       <tr><td>SQLite store</td><td>Local persistence for cookies, favorites, watch history, installed extensions, and settings.</td></tr>
     </table>
 

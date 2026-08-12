@@ -1,0 +1,18 @@
+# Build context exclusions for Docker
+.git
+.gradle
+.kotlin
+.idea
+.vscode
+out
+build
+**/build
+data
+flaresolverr
+packaging/stage
+packaging/dist
+*.exe
+*.jar.bak
+*.iml
+cleanup_ws.py
+strip_comments.py

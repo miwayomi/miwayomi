@@ -14,9 +14,6 @@ let state = {
   currentEpNumber: null,
 };
 
-let cfRetry = null;
-let cfTimer = null;
-
 // In-app navigation stack (SPA has no real browser history between views)
 let navStack = [];
 function navPush(restore) { navStack.push(restore); }
@@ -71,8 +68,6 @@ async function getJSON(url) {
   let body = null;
   try { body = await res.json(); } catch (e) { }
   if (body && body.challengeUrl) {
-    cfRetry = () => getJSON(url);
-    openCfModal(body.challengeUrl, body.challengeUserAgent);
     throw new Error(t("cf.challengeError"));
   }
   throw new Error(`HTTP ${res.status}`);
@@ -1500,106 +1495,6 @@ function globalSearchGo() {
       doSearch();
     }
   }
-}
-
-/* ---------------- Cloudflare modal ---------------- */
-
-async function openCfModal(url, ua) {
-  $("#cfModal").classList.remove("hidden");
-  const stage = $("#cfStage");
-  stage.innerHTML = `<div class="cf-loading">${escapeHtml(t("cf.preparing"))}</div>`;
-  try {
-    const res = await fetch(`${api}/cf/start?url=${encodeURIComponent(url)}${ua ? `&ua=${encodeURIComponent(ua)}` : ""}`);
-    if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
-      stage.innerHTML = `<div class="error">${escapeHtml(t("cf.browserError", b.error || res.status))}</div>`;
-      return;
-    }
-    stage.innerHTML = `<img id="cfShot" class="cf-shot" alt="Challenge screenshot">`;
-    const img = $("#cfShot");
-    img.addEventListener("click", cfClick);
-    startCfPolling();
-  } catch (e) {
-    stage.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
-  }
-}
-
-function startCfPolling() {
-  stopCfPolling();
-  cfTimer = setInterval(async () => {
-    const shot = $("#cfShot");
-    try {
-      const u = await fetch(`${api}/cf/url`);
-      if (u.ok) {
-        const d = await u.json();
-        const el = $("#cfUrl");
-        if (el && d.url) el.textContent = t("cf.urlPrefix") + d.url;
-      }
-    } catch (e) { }
-    if (!shot) return;
-    try {
-      const res = await fetch(`${api}/cf/shot`);
-      if (!res.ok) return;
-      const blob = await res.blob();
-      if (!blob || blob.size < 100) return;
-      const oldSrc = shot.src;
-      shot.src = URL.createObjectURL(blob);
-      if (oldSrc && oldSrc.startsWith("blob:")) URL.revokeObjectURL(oldSrc);
-    } catch (e) { }
-  }, 1100);
-}
-
-function stopCfPolling() {
-  if (cfTimer) { clearInterval(cfTimer); cfTimer = null; }
-}
-
-async function cfClick(e) {
-  const img = $("#cfShot");
-  if (!img || !img.naturalWidth) return;
-  const r = img.getBoundingClientRect();
-  const x = Math.round((e.clientX - r.left) * (img.naturalWidth / r.width));
-  const y = Math.round((e.clientY - r.top) * (img.naturalHeight / r.height));
-  try {
-    await fetch(`${api}/cf/click`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ x, y }),
-    });
-  } catch (e) { }
-}
-
-async function cfKey(key) {
-  try {
-    await fetch(`${api}/cf/key`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
-    });
-  } catch (e) { }
-}
-
-async function cfFinish() {
-  stopCfPolling();
-  $("#cfModal").classList.add("hidden");
-  const retry = cfRetry;
-  cfRetry = null;
-  try {
-    const res = await fetch(`${api}/cf/finish`, { method: "POST" });
-    const b = await res.json().catch(() => ({}));
-    console.log(t("cf.cookiesSaved", b.count));
-  } catch (e) { }
-  if (retry) retry().catch((e) => showError(e.message));
-}
-
-function cfClose() {
-  stopCfPolling();
-  $("#cfModal").classList.add("hidden");
-  cfRetry = null;
-}
-
-function showError(msg) {
-  const box = $("#catalog");
-  if (box) box.innerHTML = `<div class="error">${escapeHtml(msg)}</div>`;
 }
 
 /* ---------------- Modal helpers ---------------- */

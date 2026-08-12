@@ -4,7 +4,7 @@
 
 **Run Tachiyomi/Aniyomi catalog extensions on your PC / Mac / Linux — no Android emulator, no phone.**
 
-A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the Tachiyomi/Aniyomi format** (APK) directly on your computer and exposes them as a **REST API + WebUI** — manga **and** anime, with HLS/DASH streaming, a manual Cloudflare bypass, and a multilingual interface.
+A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the Tachiyomi/Aniyomi format** (APK) directly on your computer and exposes them as a **REST API + WebUI** — manga **and** anime, with HLS/DASH streaming, automatic Cloudflare solving via FlareSolverr, and a multilingual interface.
 
 <p align="center">
   <a href="https://github.com/miwayomi/miwayomi/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/miwayomi/miwayomi?color=blue&label=release"></a>
@@ -59,8 +59,7 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
 - **Manga**: catalog, search, details, chapters, pages, and image proxy.
 - **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS (hls.js + `/hls` proxy), **DASH .mpd** (dash.js + `/dash`/`/dashseg` proxy with manifest rewriting), and direct MP4/WebM.
 - **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
-- **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP): live screenshots, clicks/keys, cookie capture (`cf_clearance`) and fast reuse.
-- **FlareSolverr** integration (client `/v1` + interceptor), optional.
+- **Cloudflare solving via FlareSolverr** (client `/v1` + interceptor): challenges are solved automatically by FlareSolverr, and the resulting cookies (`cf_clearance`) plus resolved hosts are cached in SQLite for fast reuse.
 - **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites, reading progress, anime watch history, installed extensions, and your repository URLs.
 - **Source settings via API**: exposes the preferences each extension declares (language, quality, domain, ...).
 - **Anime player with history**: invert episode order (newest/oldest), auto-play the next episode, auto-select the best video source, and a **"Continue watching"** home row that resumes exactly where you left off (progress stored in SQLite).
@@ -72,7 +71,7 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
 ## Requirements
 
 - **JDK 21** (Temurin recommended). Gradle downloads itself via the wrapper.
-- Chrome/Chromium — only if you want the **manual Cloudflare bypass** (the one bundled with FlareSolverr in `flaresolverr/`, or `--chrome <path>`).
+- **FlareSolverr** (optional) to solve Cloudflare challenges automatically — see [Cloudflare bypass](#cloudflare-bypass). No browser is needed by miwayomi itself.
 
 ## Installation
 
@@ -104,6 +103,20 @@ cd miwayomi
 ```
 
 The JVM runs with a small heap + `SerialGC` (`-Xmx512m -Xms64m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC`, ~160–170 MB RSS at rest). Tune RAM with `MIWAYOMI_MEM="-Xmx768m" ./start.sh`. Dev mode (no install): `./gradlew :server:run --args="--data ./data --port 4567"`.
+
+### 4. Docker (recommended for servers / VPS)
+
+Run the server and FlareSolverr together with Docker — no JDK and no browser needed on the host:
+
+```bash
+docker compose up -d      # builds miwayomi + FlareSolverr (from source, in a venv)
+```
+
+- WebUI/API: `http://localhost:4567`
+- FlareSolverr: `http://localhost:8191`
+- Persistent data (SQLite, extensions, cookies) lives in the named volume `miwayomi-data`.
+
+The `Dockerfile` builds the fat JAR in a JDK stage and runs it with a slim **JRE** (no JDK, no browser). FlareSolverr is built from source inside a Python **virtualenv** (`docker/flaresolverr.Dockerfile`); it bundles its own headless Chromium engine, which FlareSolverr needs to solve challenges — it is not part of the miwayomi image. Tune JVM memory with the `JAVA_OPTS` env var and the FlareSolverr URL with `FLARESOLVERR_URL` (set it empty to disable).
 
 ### Windows installer
 
@@ -146,7 +159,6 @@ cd miwayomi
 | `--host`, `-h` | `0.0.0.0` | Listen address. |
 | `--data`, `-d` | `./data` | Data directory (extensions, prefs, cache). |
 | `--flaresolverr`, `-f` | `http://127.0.0.1:8191` | FlareSolverr URL (blank disables). |
-| `--chrome` | auto | Chrome/Chromium path for the manual Cloudflare modal. |
 | `--no-open` | off | Do not open a browser on start (headless). |
 
 ### Auto-update
@@ -168,12 +180,9 @@ pkill -f "flaresolverr.py"      # optional FlareSolverr
 
 ## Cloudflare bypass
 
-Some sources are behind the Cloudflare anti-bot. miwayomi has **two ways** to unlock them:
+Some sources are behind the Cloudflare anti-bot. miwayomi solves them **via FlareSolverr**:
 
-1. **Manual resolution (recommended, always works)**: the WebUI opens a modal with the live challenge; you solve the captcha by hand and miwayomi captures the cookies. Requires Chrome/Chromium (the one bundled with FlareSolverr, or `--chrome <path>`).
-2. **FlareSolverr (optional)**: tries to solve the challenge automatically with a headless browser. If it is not configured or fails to solve, the manual way is used.
-
-> Chrome for the modal: miwayomi looks for Chrome in `CHROME_PATH`, `--chrome <path>`, or the usual locations (`/tmp/flaresolverr/_internal/chrome/chrome`, `google-chrome`, `chromium`).
+> miwayomi no longer ships or launches its own browser: Cloudflare solving is done exclusively by FlareSolverr (which runs its own headless Chromium internally).
 
 ### 1. (Optional) Run FlareSolverr — option A: Docker
 
@@ -223,17 +232,17 @@ python3 -m venv /tmp/fsvenv
 ./gradlew :server:run --args="--data /home/asking/Escritorio/miwayomi/data --port 4567 --flaresolverr http://localhost:8191"
 ```
 
-> Without `--flaresolverr` it also works: on a challenge, the WebUI opens the manual modal directly.
+> Without `--flaresolverr`, sources behind a Cloudflare challenge fail with a clear error telling you to configure FlareSolverr.
 
 How it works internally:
 
 1. `CloudflareInterceptor` detects a challenge (code 403/429/503 + Cloudflare headers or a "Just a moment" body).
-2. If FlareSolverr is configured, it tries to solve it automatically (with a ~20 s limit).
-3. If it fails (or there is no FlareSolverr), it returns `challengeUrl` in the error and the WebUI opens a **manual resolution modal**: the server launches its own headless Chrome (CDP), shows live screenshots, forwards your clicks/keys, and when you press "I've solved it" it **captures the cookies** (including HttpOnly ones like `cf_clearance`) and stores them in the cookie jar. From then on, requests pass without a challenge.
+2. It asks FlareSolverr to solve it automatically (with a ~20 s limit).
+3. On success, the returned cookies (including HttpOnly ones like `cf_clearance`) are stored in the cookie jar; from then on, requests pass without a challenge.
 
-> **Key detail**: Cloudflare binds `cf_clearance` to the User-Agent that solved the challenge. That is why the browser solves with the Chrome UA and, after saving the cookies, the server forces that same UA on requests to that host (`CfResolvedUa`) so they pass without being re-challenged.
+> **Key detail**: Cloudflare binds `cf_clearance` to the User-Agent that solved the challenge. That is why FlareSolverr solves with its browser UA and, after saving the cookies, the server forces that same UA on requests to that host (`CfResolvedUa`) so they pass without being re-challenged.
 
-> **Known limitations**: some Cloudflare challenges (Turnstile/interactive captcha) do not auto-solve in headless Chrome; the manual modal solves them. Some extensions ship their own interceptor that creates a WebView to solve the challenge; with the no-op stub that flow can be slow/hang — the reliable path is the manual modal (which uses the real browser).
+> **Known limitations**: some Cloudflare challenges (Turnstile/interactive captcha) may not auto-solve in FlareSolverr's headless browser. Some extensions ship their own interceptor that creates a WebView to solve the challenge; with the no-op stub that flow can be slow/hang.
 
 ## REST API (v1)
 
@@ -252,8 +261,6 @@ How it works internally:
 | `GET /api/v1/hls?sourceId={id}&url=...&headers=...` | HLS proxy: rewrites the manifest and routes segments with headers (playback) |
 | `GET /api/v1/dash?sourceId={id}&url=...&headers=...` | DASH proxy: rewrites the `.mpd` and routes segments (`.mpd` playback) |
 | `GET /api/v1/dashseg?base=...&rel=...` | DASH segment served by the proxy (with `$Number$` templates intact) |
-| `GET /api/v1/cf/start?url=...` · `cf/shot` · `cf/url` | Manual Cloudflare resolution (headless browser + CDP) |
-| `POST /api/v1/cf/click` `{x,y}` · `cf/key` `{key}` · `cf/finish` | Clicks/keys to the browser and cookie saving on solve |
 | `GET /api/v1/extensions/repo?url=<index>` | List extensions from a repository index (`index.min.json` / `index.pb`) |
 | `GET /api/v1/extensions/installed` | List locally installed extensions (restored from the database) |
 | `GET /api/v1/extensions/repos` · `POST /api/v1/extensions/repos` `{repos:[...]}` | Load / save the user's repository URLs (persisted in the database) |
@@ -309,14 +316,15 @@ miwayomi/
 - ✅ **Manga**: catalog, search, details, chapters, pages, and image proxy.
 - ✅ **Anime**: catalog, details, episodes, video extraction, and **playback of every format**: HLS, DASH .mpd, and direct MP4/WebM.
 - ✅ **Chunked streaming** and **full MIME support**.
-- ✅ **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP).
+- ✅ **Cloudflare solving via FlareSolverr**: automatic challenge solving with cookie + UA reuse.
 - ✅ **FlareSolverr** integration, optional.
 - ✅ **SQLite persistence**: Cloudflare cookies, resolved hosts, favorites, reading progress, installed extensions, and repository URLs.
 - ✅ **Source settings via API**.
 - ✅ **Favorites and tracking**: add/remove titles and remember the last read chapter.
 - ✅ **Extension manager** in the WebUI (browse a repository, install/uninstall, and your repository URLs persist in the database).
 - ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
-- ⏳ **Docker image** (GHCR + Docker Hub, multi-arch) planned for the near future — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
+- ✅ **Docker** — `Dockerfile` + `docker-compose.yml` (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv): `docker compose up -d`.
+- ⏳ **Publish the image** to GHCR + Docker Hub (multi-arch amd64/arm64) — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
 - ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
 
 ## Documentation

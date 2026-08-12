@@ -82,7 +82,6 @@ fun Application.registerApi() {
     registerMangaApi()
     registerAnimeApi()
     registerStreamingApi()
-    registerCfApi()
     registerExtensionApi()
     registerSourcePrefsApi()
     registerFavoritesApi()
