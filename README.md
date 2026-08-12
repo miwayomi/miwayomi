@@ -32,6 +32,7 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
   - [1. Desktop app (recommended)](#1-desktop-app-recommended)
   - [2. Plain JAR (any OS)](#2-plain-jar-any-os)
   - [3. Headless server (production / VPS)](#3-headless-server-production--vps)
+  - [4. Docker (recommended for servers / VPS)](#4-docker-recommended-for-servers--vps)
   - [Windows installer](#windows-installer)
   - [Build from source](#build-from-source)
 - [Usage](#usage)
@@ -197,6 +198,8 @@ Some sources are behind the Cloudflare anti-bot. miwayomi solves them **via Flar
 ```bash
 docker run -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
 ```
+
+Or use the sidecar image miwayomi builds and publishes itself (from source, in a venv): `ghcr.io/miwayomi/flaresolverr` — that's the one `docker compose up -d` uses.
 
 ### 1'. (Optional) Run FlareSolverr — option B: binary, no Docker
 

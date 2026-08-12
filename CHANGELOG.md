@@ -2,6 +2,25 @@
 
 All notable changes to miwayomi.
 
+## [Unreleased]
+
+### Added
+- **Docker**: a `Dockerfile` + `docker-compose.yml` run the server on a slim
+  **JRE 21** (no JDK, no browser) with a **FlareSolverr sidecar** built from
+  source inside a Python virtualenv; a named volume keeps the data directory
+  (SQLite, extensions, cookies) across restarts.
+- **GHCR images**: CI builds and publishes `ghcr.io/miwayomi/miwayomi` and
+  `ghcr.io/miwayomi/flaresolverr` (multi-arch `linux/amd64` + `linux/arm64`)
+  on every push to `main` and every release, with `latest`/semver/`sha` tags.
+
+### Changed
+- **Cloudflare solved via FlareSolverr only**: the manual Cloudflare modal
+  (which launched its own headless Chrome over CDP) was removed. Challenges
+  are now resolved exclusively by FlareSolverr, the `--chrome` flag is gone,
+  and no browser is bundled with the server.
+
+---
+
 ## [v0.2.7] - 2026-08-12
 
 ### Added
