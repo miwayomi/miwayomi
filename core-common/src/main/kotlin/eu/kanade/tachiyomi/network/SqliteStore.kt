@@ -64,6 +64,20 @@ class SqliteStore(dbFile: File) : AutoCloseable {
                     PRIMARY KEY (source_id, anime_url, ep_url)
                 )""",
             )
+            st.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS extensions (
+                    pkg          TEXT PRIMARY KEY,
+                    name         TEXT NOT NULL,
+                    version_name TEXT NOT NULL,
+                    version_code INTEGER NOT NULL,
+                    is_nsfw      INTEGER NOT NULL,
+                    is_anime     INTEGER NOT NULL,
+                    apk_file     TEXT,
+                    jar_file     TEXT,
+                    source_count INTEGER NOT NULL DEFAULT 0,
+                    installed_at INTEGER NOT NULL
+                )""",
+            )
         }
     }
 
@@ -302,6 +316,78 @@ class SqliteStore(dbFile: File) : AutoCloseable {
             ps.setString(2, animeUrl)
             ps.setString(3, epUrl)
             ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun extensionAll(): List<StoredExtension> =
+        connection.createStatement().use { st ->
+            st.executeQuery(
+                "SELECT pkg, name, version_name, version_code, is_nsfw, is_anime, apk_file, jar_file, source_count, installed_at FROM extensions",
+            ).use { rs ->
+                val out = mutableListOf<StoredExtension>()
+                while (rs.next()) {
+                    out.add(
+                        StoredExtension(
+                            pkg = rs.getString(1),
+                            name = rs.getString(2),
+                            versionName = rs.getString(3),
+                            versionCode = rs.getLong(4),
+                            isNsfw = rs.getInt(5) != 0,
+                            isAnime = rs.getInt(6) != 0,
+                            apkFile = rs.getString(7),
+                            jarFile = rs.getString(8),
+                            sourceCount = rs.getInt(9),
+                            installedAt = rs.getLong(10),
+                        ),
+                    )
+                }
+                out
+            }
+        }
+
+    @Synchronized
+    fun extensionUpsert(e: StoredExtension) {
+        connection.prepareStatement(
+            """INSERT OR REPLACE INTO extensions
+               (pkg, name, version_name, version_code, is_nsfw, is_anime, apk_file, jar_file, source_count, installed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ).use { ps ->
+            ps.setString(1, e.pkg)
+            ps.setString(2, e.name)
+            ps.setString(3, e.versionName)
+            ps.setLong(4, e.versionCode)
+            ps.setInt(5, if (e.isNsfw) 1 else 0)
+            ps.setInt(6, if (e.isAnime) 1 else 0)
+            ps.setString(7, e.apkFile)
+            ps.setString(8, e.jarFile)
+            ps.setInt(9, e.sourceCount)
+            ps.setLong(10, e.installedAt)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun extensionDelete(pkg: String) {
+        connection.prepareStatement("DELETE FROM extensions WHERE pkg = ?").use { ps ->
+            ps.setString(1, pkg)
+            ps.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun reposGet(): List<String> {
+        val raw = kvGet("user_repos") ?: return emptyList()
+        return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    @Synchronized
+    fun reposSet(repos: List<String>) {
+        val filtered = repos.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (filtered.isEmpty()) {
+            kvDelete("user_repos")
+        } else {
+            kvSet("user_repos", filtered.joinToString("\n"))
         }
     }
 

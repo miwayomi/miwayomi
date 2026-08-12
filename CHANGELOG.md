@@ -2,6 +2,22 @@
 
 All notable changes to miwayomi.
 
+## [v0.2.7] - 2026-08-12
+
+### Added
+- **Extensions loaded and saved in the database**: installed extensions are now
+  registered in the server's SQLite database (new `extensions` table), so the
+  installed list is restored from the database on every start and shown in the
+  Extensions tab without needing any repository.
+- **Repository URLs persist**: repository index URLs you add from the
+  Extensions tab are saved in the database and restored automatically, so you
+  don't have to re-enter them next time.
+- **Extensions tab improvements**: when no repository is configured it now
+  lists the locally installed extensions; repositories can still be added,
+  removed and switched at any time.
+
+---
+
 ## [v0.2.6] - 2026-08-11
 
 ### Added

@@ -6,6 +6,7 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import miwayomi.api.registerApi
+import miwayomi.api.syncExtensionRegistry
 import miwayomi.builtin.DemoSource
 import miwayomi.builtin.MockCfSource
 import miwayomi.di.AppModule
@@ -37,6 +38,7 @@ fun buildServer(config: ServerConfig): EmbeddedServer<*, *> {
     val extensionManager = Injekt.get<ExtensionManager>()
     val loaded = extensionManager.loadAll()
     println("[miwayomi] $loaded extension(s) loaded")
+    syncExtensionRegistry(extensionManager)
 
     Injekt.get<MangaSourceManager>().register(DemoSource())
     Injekt.get<MangaSourceManager>().register(MockCfSource())

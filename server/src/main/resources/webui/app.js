@@ -1255,25 +1255,37 @@ async function saveSourcePrefs() {
   }
 }
 
-/* ---------------- Extensions (multi-repo) ---------------- */
+/* ---------------- Extensions (repos stored in the DB) ---------------- */
 
-const DEFAULT_REPO = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json";
 let REPOS = [];
 let activeRepo = 0;
 
-function loadRepos() {
-  try { REPOS = JSON.parse(localStorage.getItem("miwayomi.repos") || "[]"); } catch (e) { REPOS = []; }
-  if (!Array.isArray(REPOS) || REPOS.length === 0) REPOS = [DEFAULT_REPO];
+// Repository URLs are persisted server-side (SQLite) so the user doesn't have
+// to re-enter them, and no repository is loaded by default.
+async function loadRepos() {
+  REPOS = [];
+  try {
+    const d = await getJSON(`${api}/extensions/repos`);
+    REPOS = Array.isArray(d.repos) ? d.repos.filter(Boolean) : [];
+  } catch (e) { REPOS = []; }
   if (activeRepo >= REPOS.length) activeRepo = 0;
 }
-function saveRepos() { localStorage.setItem("miwayomi.repos", JSON.stringify(REPOS)); }
+async function saveRepos() {
+  try {
+    await fetch(`${api}/extensions/repos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repos: REPOS }),
+    });
+  } catch (e) { }
+}
 function shortRepo(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return url; }
 }
 
-function openExtensions() {
-  loadRepos();
+async function openExtensions() {
   activeRepo = 0;
+  await loadRepos();
   renderExtensionsModal();
   openModal();
   loadRepo();
@@ -1303,28 +1315,46 @@ function renderExtensionsModal() {
 function switchRepo(i) { activeRepo = i; renderExtensionsModal(); loadRepo(); }
 function showAddRepo() { const el = $("#repoAdd"); if (el) el.style.display = "flex"; }
 function hideAddRepo() { const el = $("#repoAdd"); if (el) el.style.display = "none"; }
-function confirmAddRepo() {
+async function confirmAddRepo() {
   const input = $("#repoUrl");
   const url = (input && input.value.trim()) || "";
   if (!url) return;
   REPOS.push(url);
-  saveRepos();
+  await saveRepos();
   activeRepo = REPOS.length - 1;
   renderExtensionsModal();
   loadRepo();
 }
-function removeRepo(i) {
+async function removeRepo(i) {
   REPOS.splice(i, 1);
-  saveRepos();
+  await saveRepos();
   if (activeRepo >= REPOS.length) activeRepo = REPOS.length - 1;
   renderExtensionsModal();
   loadRepo();
 }
 
 async function loadRepo() {
-  const url = REPOS[activeRepo] || DEFAULT_REPO;
   const list = $("#repoList");
   const prevScroll = list ? list.scrollTop : 0;
+  const url = REPOS[activeRepo];
+  if (!url) {
+    // No repository configured: show only the locally installed extensions.
+    if (list) list.innerHTML = `<div class="loading">${escapeHtml(t("ext.loading"))}</div>`;
+    try {
+      const data = await getJSON(`${api}/extensions/installed`);
+      window.__repo = data.extensions || [];
+      if (!window.__repo.length) {
+        if (list) list.innerHTML = `<div class="empty">${escapeHtml(t("ext.noRepos"))}</div>`;
+        return;
+      }
+      populateLangFilter();
+      renderRepo(window.__repo, $("#repoSearch")?.value || "", $("#repoLang")?.value || "");
+      if (list) list.scrollTop = prevScroll;
+    } catch (e) {
+      if (list) list.innerHTML = `<div class="error">${escapeHtml(t("common.error", e.message))}</div>`;
+    }
+    return;
+  }
   if (list) list.innerHTML = `<div class="loading">${escapeHtml(t("ext.consulting"))}</div>`;
   try {
     const data = await getJSON(`${api}/extensions/repo?url=${encodeURIComponent(url)}`);
@@ -1405,7 +1435,7 @@ async function installExt(apk, btn) {
     const res = await fetch(`${api}/extensions/install`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repoUrl: REPOS[activeRepo] || DEFAULT_REPO, apk }),
+      body: JSON.stringify({ repoUrl: REPOS[activeRepo] || "", apk }),
     });
     const data = await res.json().catch(() => ({}));
     if (data.ok) {

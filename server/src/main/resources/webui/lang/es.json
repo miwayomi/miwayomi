@@ -60,6 +60,7 @@
   "ext.add": "Añadir",
   "ext.allLangs": "Todos los idiomas",
   "ext.filterLang": "Filtrar por idioma",
+  "ext.noRepos": "Aún no hay repositorios añadidos. Añade uno arriba para instalar desde él, o instala extensiones manualmente. Aquí solo se muestran las extensiones instaladas.",
 
   "settings.title": "Ajustes",
   "settings.appearance": "Apariencia",

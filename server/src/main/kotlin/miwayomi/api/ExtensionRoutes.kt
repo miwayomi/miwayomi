@@ -1,7 +1,12 @@
 package miwayomi.api
 
+import android.compat.CompatRuntime
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.SqliteStore
+import eu.kanade.tachiyomi.network.StoredExtension
+import eu.kanade.tachiyomi.source.MangaSource
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -22,7 +27,36 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 
-val DEFAULT_REPO_URL = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json"
+/**
+ * Persists the currently loaded extensions in the SQLite registry and prunes
+ * entries whose files no longer exist. Called once at startup so the installed
+ * list survives restarts even when the release ships empty (no bundled apk/jar).
+ */
+fun syncExtensionRegistry(extensionManager: ExtensionManager) {
+    val store = SqliteStore(File(CompatRuntime.cacheDir, "miwayomi.db"))
+    val now = System.currentTimeMillis()
+    val loadedPkgs = extensionManager.loaded.map { it.meta.pkgName }.toSet()
+    extensionManager.loaded.forEach { ext ->
+        store.extensionUpsert(
+            StoredExtension(
+                pkg = ext.meta.pkgName,
+                name = ext.meta.name,
+                versionName = ext.meta.versionName,
+                versionCode = ext.meta.versionCode,
+                isNsfw = ext.meta.isNsfw,
+                isAnime = ext.meta.isAnime,
+                apkFile = ext.apk.name,
+                jarFile = ext.jar.name,
+                sourceCount = ext.manga + ext.anime,
+                installedAt = now,
+            ),
+        )
+    }
+    store.extensionAll().forEach { stored ->
+        if (stored.pkg !in loadedPkgs) store.extensionDelete(stored.pkg)
+    }
+    store.close()
+}
 
 @Serializable
 data class RepoSourceDto(val name: String, val lang: String)
@@ -49,9 +83,18 @@ data class RepoListDto(
 
 @Serializable
 data class InstallRequestDto(
-    val repoUrl: String = DEFAULT_REPO_URL,
+    val repoUrl: String = "",
     val apk: String,
 )
+
+@Serializable
+data class ReposDto(val repos: List<String>)
+
+@Serializable
+data class ReposSaveDto(val repos: List<String> = emptyList())
+
+@Serializable
+data class ReposResultDto(val ok: Boolean)
 
 @Serializable
 data class InstallResultDto(
@@ -80,10 +123,12 @@ fun Application.registerExtensionApi() {
     val json = Json { ignoreUnknownKeys = true }
     val extensionManager = Injekt.get<ExtensionManager>()
     val extensionsDir = ConfigHolder.config.extensionsDir
+    val store = SqliteStore(File(CompatRuntime.cacheDir, "miwayomi.db"))
 
     routing {
         get("/api/v1/extensions/repo") {
-            val repo = call.request.queryParameters["url"]?.takeIf { it.isNotBlank() } ?: DEFAULT_REPO_URL
+            val repo = call.request.queryParameters["url"]?.takeIf { it.isNotBlank() }
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("url required"))
             val client = Injekt.get<NetworkHelper>().client
 
             val response = client.newCall(GET(repo)).execute()
@@ -133,6 +178,59 @@ fun Application.registerExtensionApi() {
             }
 
             call.respond(RepoListDto(repo, entries.size, entries.count { it.installed }, entries))
+        }
+
+        // Locally installed extensions only — no remote repository involved.
+        // Keeps the registry (SQLite) in sync with what is actually loaded.
+        get("/api/v1/extensions/installed") {
+            val now = System.currentTimeMillis()
+            val entries = extensionManager.loaded.map { ext ->
+                store.extensionUpsert(
+                    StoredExtension(
+                        pkg = ext.meta.pkgName,
+                        name = ext.meta.name,
+                        versionName = ext.meta.versionName,
+                        versionCode = ext.meta.versionCode,
+                        isNsfw = ext.meta.isNsfw,
+                        isAnime = ext.meta.isAnime,
+                        apkFile = ext.apk.name,
+                        jarFile = ext.jar.name,
+                        sourceCount = ext.manga + ext.anime,
+                        installedAt = now,
+                    ),
+                )
+                RepoEntryDto(
+                    name = ext.meta.name,
+                    pkg = ext.meta.pkgName,
+                    lang = "",
+                    nsfw = ext.meta.isNsfw,
+                    apk = ext.apk.name,
+                    version = ext.meta.versionName,
+                    installed = true,
+                    sources = ext.sources.mapNotNull { s ->
+                        val name = when (s) {
+                            is MangaSource -> s.name
+                            is AnimeSource -> s.name
+                            else -> null
+                        } ?: return@mapNotNull null
+                        RepoSourceDto(name, "")
+                    },
+                )
+            }
+            call.respond(RepoListDto("installed", entries.size, entries.size, entries))
+        }
+
+        // User-added repository URLs, persisted in the database so they don't
+        // have to be re-entered every time (no default repo is loaded).
+        get("/api/v1/extensions/repos") {
+            call.respond(ReposDto(store.reposGet()))
+        }
+
+        post("/api/v1/extensions/repos") {
+            val req = runCatching { call.receive<ReposSaveDto>() }.getOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorDto("invalid body"))
+            store.reposSet(req.repos)
+            call.respond(ReposResultDto(ok = true))
         }
 
         post("/api/v1/extensions/install") {
@@ -204,6 +302,21 @@ fun Application.registerExtensionApi() {
                 return@post call.respond(HttpStatusCode.InternalServerError, InstallResultDto(ok = false, error = root.message ?: e.message ?: "error loading"))
             }
 
+            store.extensionUpsert(
+                StoredExtension(
+                    pkg = loaded.meta.pkgName,
+                    name = loaded.meta.name,
+                    versionName = loaded.meta.versionName,
+                    versionCode = loaded.meta.versionCode,
+                    isNsfw = loaded.meta.isNsfw,
+                    isAnime = loaded.meta.isAnime,
+                    apkFile = loaded.apk.name,
+                    jarFile = loaded.jar.name,
+                    sourceCount = loaded.manga + loaded.anime,
+                    installedAt = System.currentTimeMillis(),
+                ),
+            )
+
             call.respond(
                 InstallResultDto(
                     ok = true,
@@ -225,6 +338,7 @@ fun Application.registerExtensionApi() {
             if (removed == null) {
                 return@post call.respond(HttpStatusCode.NotFound, UninstallResultDto(ok = false, error = "extension not installed"))
             }
+            store.extensionDelete(pkg)
             call.respond(UninstallResultDto(ok = true, name = removed.meta.name, pkg = pkg))
         }
     }
