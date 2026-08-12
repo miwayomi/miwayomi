@@ -3,12 +3,16 @@
 # miwayomi — headless server image (no Chromium; Cloudflare is handled by
 # FlareSolverr only, see docker-compose.yml / docker/flaresolverr.Dockerfile).
 
-# ---- Stage 1: build the fat JAR (JDK 21 + Gradle wrapper) ----
-FROM eclipse-temurin:21-jdk AS build
+# ---- Stage 1: build the fat JAR (Gradle 8.10.2 on JDK 21) ----
+# The official gradle image ships Gradle 8.10.2 (the version the wrapper pins),
+# so the build never downloads the Gradle distribution from
+# services.gradle.org — which occasionally 503s on GitHub Actions.
+FROM gradle:8.10.2-jdk21 AS build
+USER root
 WORKDIR /src
 
-# Copy the Gradle wrapper and project definition first for better layer caching.
-COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties ./
+# Copy the project definition first for better layer caching.
+COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
 
 # Copy the modules the server build needs.
@@ -17,7 +21,9 @@ COPY core-common ./core-common
 COPY android-compat ./android-compat
 COPY server ./server
 
-RUN ./gradlew :server:shadowJar --no-daemon --console=plain
+# Retry once: dependency downloads can still hit transient network 503s.
+RUN gradle --no-daemon --console=plain :server:shadowJar \
+    || gradle --no-daemon --console=plain :server:shadowJar
 
 # ---- Stage 2: runtime (JRE only — no JDK, no Chromium) ----
 FROM eclipse-temurin:21-jre
