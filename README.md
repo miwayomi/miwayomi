@@ -118,6 +118,14 @@ docker compose up -d      # builds miwayomi + FlareSolverr (from source, in a ve
 
 The `Dockerfile` builds the fat JAR in a JDK stage and runs it with a slim **JRE** (no JDK, no browser). FlareSolverr is built from source inside a Python **virtualenv** (`docker/flaresolverr.Dockerfile`); it bundles its own headless Chromium engine, which FlareSolverr needs to solve challenges — it is not part of the miwayomi image. Tune JVM memory with the `JAVA_OPTS` env var and the FlareSolverr URL with `FLARESOLVERR_URL` (set it empty to disable).
 
+Prebuilt images are published to **GHCR** on every push to `main` and on every release — multi-arch (`linux/amd64`, `linux/arm64`), no local build needed: `ghcr.io/miwayomi/miwayomi` and `ghcr.io/miwayomi/flaresolverr` (`latest`, plus version tags like `0.3.0`). Run the app image alone (point `FLARESOLVERR_URL` at your solver, or set it empty to disable solving):
+
+```bash
+docker run -d --name miwayomi -p 4567:4567 -v miwayomi-data:/data \
+  -e FLARESOLVERR_URL=http://127.0.0.1:8191 \
+  ghcr.io/miwayomi/miwayomi:latest
+```
+
 ### Windows installer
 
 Get a native Windows `miwayomi-setup-<version>.exe` in two ways:
@@ -324,7 +332,8 @@ miwayomi/
 - ✅ **Extension manager** in the WebUI (browse a repository, install/uninstall, and your repository URLs persist in the database).
 - ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
 - ✅ **Docker** — `Dockerfile` + `docker-compose.yml` (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv): `docker compose up -d`.
-- ⏳ **Publish the image** to GHCR + Docker Hub (multi-arch amd64/arm64) — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
+- ✅ **GHCR images** (`ghcr.io/miwayomi/miwayomi` + `ghcr.io/miwayomi/flaresolverr`, multi-arch amd64/arm64) built by CI on every push and release.
+- ⏳ Docker Hub mirror — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
 - ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
 
 ## Documentation

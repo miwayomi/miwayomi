@@ -441,6 +441,7 @@ cp lang/en.json lang/fr.json
     <h3>Docker (recommended for servers / VPS)</h3>
     <pre>docker compose up -d      <span class="c"># builds miwayomi + FlareSolverr (from source, in a venv)</span></pre>
     <p>WebUI/API on <code>http://localhost:4567</code>, FlareSolverr on <code>http://localhost:8191</code>; persistent data (SQLite, extensions, cookies) lives in the named volume <code>miwayomi-data</code>. The <code>Dockerfile</code> builds the fat JAR with a JDK stage and runs it with a slim <b>JRE</b> (no JDK, no browser). FlareSolverr is built from source inside a Python <b>virtualenv</b> (<code>docker/flaresolverr.Dockerfile</code>) and bundles its own headless Chromium engine — required by FlareSolverr, not part of miwayomi. Tune JVM memory with the <code>JAVA_OPTS</code> env var; change the solver URL with <code>FLARESOLVERR_URL</code> (empty disables it).</p>
+    <p>Prebuilt images are published to <b>GHCR</b> on every push to <code>main</code> and on every release — multi-arch (<code>linux/amd64</code>, <code>linux/arm64</code>), no local build needed: <code>ghcr.io/miwayomi/miwayomi</code> and <code>ghcr.io/miwayomi/flaresolverr</code> (<code>latest</code>, plus version tags like <code>0.3.0</code>). Run the app image alone: <code>docker run -d -p 4567:4567 -v miwayomi-data:/data -e FLARESOLVERR_URL=http://127.0.0.1:8191 ghcr.io/miwayomi/miwayomi:latest</code>.</p>
     <h3>Dev mode</h3>
     <pre>./gradlew :server:run --args="--data ./data --port 4567 --flaresolverr http://127.0.0.1:8191"</pre>
     <h3>CLI options</h3>
@@ -538,7 +539,7 @@ cp lang/en.json lang/fr.json
 
     <h2 id="roadmap">Roadmap</h2>
     <ul>
-      <li><b>Docker</b> — done: <code>Dockerfile</code> + <code>docker-compose.yml</code> (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv); <code>docker compose up -d</code> runs it. Publishing the image to GHCR is next.</li>
+      <li><b>Docker</b> — done: <code>Dockerfile</code> + <code>docker-compose.yml</code> (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv); <code>docker compose up -d</code> runs it, and GHCR images are published by CI on every push/release.</li>
       <li>More web UI views — filters, in-place sorting, page caching.</li>
       <li>Per-source JS engines — isolate QuickJs/Duktape per extension.</li>
       <li>Torrent streaming — the stub exists in <code>core-common</code>.</li>

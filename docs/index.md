@@ -536,6 +536,12 @@ docker compose up -d      # builds miwayomi + FlareSolverr (from source, in a ve
 - Tune JVM memory with the `JAVA_OPTS` env var; change the solver URL with
   `FLARESOLVERR_URL` (empty disables it).
 
+Prebuilt images are published to **GHCR** on every push to `main` and on every
+release — multi-arch (`linux/amd64`, `linux/arm64`), no local build needed:
+`ghcr.io/miwayomi/miwayomi` and `ghcr.io/miwayomi/flaresolverr` (`latest`, plus
+version tags like `0.3.0`). Run the app image alone with
+`docker run -d -p 4567:4567 -v miwayomi-data:/data -e FLARESOLVERR_URL=http://127.0.0.1:8191 ghcr.io/miwayomi/miwayomi:latest`.
+
 ### Quick start (desktop / JAR)
 
 `java -jar miwayomi-all.jar` (from the
@@ -901,7 +907,7 @@ The project is alive and the best way to help is to make it yours:
 
 - **Docker** — done: `Dockerfile` + `docker-compose.yml` (miwayomi on a slim
   JRE + a FlareSolverr sidecar built from source in a venv); `docker compose
-  up -d` runs it. Publishing the image to GHCR is next.
+  up -d` runs it, and GHCR images are published by CI on every push/release.
 - **More web UI views** — filters, in-place sorting, per-chapter page caching.
 - **Per-source JS engines** — isolate QuickJs/Duktape runtimes per extension.
 - **Torrent streaming** — the stub exists in `core-common`; the real thing is
