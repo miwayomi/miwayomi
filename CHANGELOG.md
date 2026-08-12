@@ -2,7 +2,7 @@
 
 All notable changes to miwayomi.
 
-## [Unreleased]
+## [v0.2.8] - 2026-08-12
 
 ### Added
 - **Docker**: a `Dockerfile` + `docker-compose.yml` run the server on a slim
