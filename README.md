@@ -61,11 +61,11 @@ A lightweight server (Ktor, **JVM 21**) that loads **catalog extensions in the T
 - **Chunked streaming** (does not load large files into RAM) and **full MIME support** (video, audio, subtitles, playlists, and images) even when the CDN sends `application/octet-stream`.
 - **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP): live screenshots, clicks/keys, cookie capture (`cf_clearance`) and fast reuse.
 - **FlareSolverr** integration (client `/v1` + interceptor), optional.
-- **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites, reading progress, and anime watch history.
+- **SQLite persistence**: Cloudflare cookies and resolved hosts survive restarts; also favorites, reading progress, anime watch history, installed extensions, and your repository URLs.
 - **Source settings via API**: exposes the preferences each extension declares (language, quality, domain, ...).
 - **Anime player with history**: invert episode order (newest/oldest), auto-play the next episode, auto-select the best video source, and a **"Continue watching"** home row that resumes exactly where you left off (progress stored in SQLite).
 - **AniList sync (optional)**: connect your own AniList account from Settings to push your watched-episode progress automatically.
-- **Extension manager** in the WebUI: install/uninstall from any repository, with status and per-extension grouping.
+- **Extension manager** in the WebUI: install/uninstall from any repository, with status and per-extension grouping; installed extensions and your repository URLs are saved in the database and restored on every start.
 - **Multilingual WebUI**: one JSON file per language in `lang/` (add a file to add a language).
 - Offline built-in demo source (no network, no configuration) for testing the pipeline.
 
@@ -254,8 +254,10 @@ How it works internally:
 | `GET /api/v1/dashseg?base=...&rel=...` | DASH segment served by the proxy (with `$Number$` templates intact) |
 | `GET /api/v1/cf/start?url=...` · `cf/shot` · `cf/url` | Manual Cloudflare resolution (headless browser + CDP) |
 | `POST /api/v1/cf/click` `{x,y}` · `cf/key` `{key}` · `cf/finish` | Clicks/keys to the browser and cookie saving on solve |
-| `GET /api/v1/extensions/repo?url=<index>` | List extensions from a repository (format index) |
-| `POST /api/v1/extensions/install` `{repoUrl, apk}` · `POST /api/v1/extensions/uninstall` `{pkg}` | Install / uninstall an extension |
+| `GET /api/v1/extensions/repo?url=<index>` | List extensions from a repository index (`index.min.json` / `index.pb`) |
+| `GET /api/v1/extensions/installed` | List locally installed extensions (restored from the database) |
+| `GET /api/v1/extensions/repos` · `POST /api/v1/extensions/repos` `{repos:[...]}` | Load / save the user's repository URLs (persisted in the database) |
+| `POST /api/v1/extensions/install` `{repoUrl, apk}` · `POST /api/v1/extensions/uninstall` `{pkg}` | Install / uninstall an extension (registered in the database) |
 | `GET /api/v1/sources/{id}/prefs` · `POST /api/v1/sources/{id}/prefs` | Read / save source preferences |
 | `GET /api/v1/favorites` · `POST /api/v1/favorites` · `DELETE /api/v1/favorites?sourceId=&url=` | Favorites |
 | `GET /api/v1/favorites/check?sourceId=&url=` · `POST /api/v1/favorites/progress` | Favorite status and reading progress |
@@ -275,6 +277,7 @@ Tachiyomi/Aniyomi extensions are **APK files** that declare their catalog classe
 4. **Loading**: a child-first `ClassLoader` loads the classes.
 5. **Instantiation**: the source factories (`SourceFactory`/`AnimeSourceFactory`) or direct sources are instantiated and registered in the manga/anime managers.
 6. **API**: the catalog, details, chapters/episodes, pages, and video endpoints delegate to each loaded source.
+7. **Persistence**: every installed extension is registered in the server's SQLite database (`extensions` table) and restored on startup, so the installed list survives restarts; repository index URLs you add are saved too and come back automatically.
 
 This mechanism is **generic**: it works for any extension in that format, regardless of who distributes it or what content it handles.
 
@@ -282,7 +285,7 @@ This mechanism is **generic**: it works for any extension in that format, regard
 
 1. **AndroidCompat**: extensions reference `android.*` and `androidx.preference.*` classes. `android-compat` implements the ones that matter (SharedPreferences, Uri, Log, Context...) and an `android.jar` stub (API 30) covers the rest. A GraalJS engine replaces QuickJS/Duktape for anime extractors.
 2. **source-api ported to JVM**: the source API module (originally an Android target) is adapted as pure JVM, replacing the Android `expect`s with real classes.
-3. **Extension loading**: miwayomi uses the repository's desktop JVM jar when one is published (otherwise `dex2jar` converts the APK), `JarFixer` auto-repairs the bytecode on first load, `ChildFirstURLClassLoader` loads it, and `SourceFactory`/`AnimeSourceFactory` instantiate the sources, which are registered in the managers.
+3. **Extension loading**: miwayomi uses the repository's desktop JVM jar when one is published (otherwise `dex2jar` converts the APK), `JarFixer` auto-repairs the bytecode on first load, `ChildFirstURLClassLoader` loads it, and `SourceFactory`/`AnimeSourceFactory` instantiate the sources, which are registered in the managers. Installed extensions and your repository URLs are stored in SQLite and restored on every start.
 4. **Server**: Ktor + REST endpoints + proxy with the headers the source requires (Referer/UA).
 
 ## Project structure
@@ -308,10 +311,10 @@ miwayomi/
 - ✅ **Chunked streaming** and **full MIME support**.
 - ✅ **Manual Cloudflare resolution**: WebUI modal with a headless browser (CDP).
 - ✅ **FlareSolverr** integration, optional.
-- ✅ **SQLite persistence**: Cloudflare cookies, resolved hosts, favorites, and reading progress.
+- ✅ **SQLite persistence**: Cloudflare cookies, resolved hosts, favorites, reading progress, installed extensions, and repository URLs.
 - ✅ **Source settings via API**.
 - ✅ **Favorites and tracking**: add/remove titles and remember the last read chapter.
-- ✅ **Extension manager** in the WebUI.
+- ✅ **Extension manager** in the WebUI (browse a repository, install/uninstall, and your repository URLs persist in the database).
 - ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
 - ⏳ **Docker image** (GHCR + Docker Hub, multi-arch) planned for the near future — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
 - ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.

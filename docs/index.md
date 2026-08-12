@@ -118,7 +118,8 @@ miwayomi was built around a handful of principles that shaped every file:
 4. **Chunked, memory-neutral streaming.** Large media is streamed in 64 KB
    chunks; nothing is ever buffered whole into RAM.
 5. **Persistence that survives restarts.** Cookies, resolved Cloudflare hosts,
-   favorites, and reading progress live in SQLite.
+   favorites, reading progress, installed extensions, and your repository URLs
+   live in SQLite.
 6. **Respect for the sites.** The proxy forwards the exact headers each source
    needs. If a site is behind Cloudflare, you resolve the challenge manually —
    your browser, your decision.
@@ -273,7 +274,7 @@ server/src/main/kotlin/miwayomi/
 core-common/src/main/kotlin/eu/kanade/tachiyomi/network/
 ├── NetworkHelper.kt        Builds the shared OkHttpClient; owns the SQLite store.
 ├── JvmCookieJar.kt         Persistent cookie jar backed by SQLite (survives restarts).
-├── SqliteStore.kt          SQLite access: kv_store, cookies, and favorites tables.
+├── SqliteStore.kt          SQLite access: kv_store, cookies, favorites, watch history, and extensions tables.
 ├── CookieCodec.kt          Cookie ↔ stored-row (de)serialization.
 ├── CfResolvedUa.kt         Persists "host → Chrome UA" for resolved Cloudflare hosts.
 ├── CloudflareChallengeException.kt  Signal thrown when a challenge is detected.
@@ -422,7 +423,10 @@ Base URL: `http://<host>:4567/api/v1` — JSON in, JSON out.
 | `POST` | `/watch` | Save/update anime watch progress (`{sourceId,animeUrl,epUrl,...}`). |
 | `DELETE` | `/watch?sourceId=&animeUrl=&epUrl=` | Remove a watch-history entry. |
 | `GET` | `/extensions/repo?url=` | List an extension repository's index. |
-| `POST` | `/extensions/install` | Install `{repoUrl, apk}`. |
+| `GET` | `/extensions/installed` | List locally installed extensions (restored from the database). |
+| `GET` | `/extensions/repos` | Load the user's saved repository URLs. |
+| `POST` | `/extensions/repos` | Save the user's repository URLs `{repos:[...]}` (persisted). |
+| `POST` | `/extensions/install` | Install `{repoUrl, apk}` (registered in the database). |
 | `POST` | `/extensions/uninstall` | Uninstall `{pkg}`. |
 | `GET` | `/cf/start?url=` | Open the headless browser for a manual challenge. |
 | `GET` | `/cf/shot` | Live screenshot of the challenge. |
@@ -466,6 +470,15 @@ curl -X POST http://localhost:4567/api/v1/sources/7374498796507972405/prefs \
 # List an extension repository index
 curl "http://localhost:4567/api/v1/extensions/repo?url=https://example.com/repo/index.json"
 
+# List locally installed extensions (restored from the database)
+curl "http://localhost:4567/api/v1/extensions/installed"
+
+# Load / save the user's repository URLs (persisted in the database)
+curl "http://localhost:4567/api/v1/extensions/repos"
+curl -X POST http://localhost:4567/api/v1/extensions/repos \
+     -H 'Content-Type: application/json' \
+     -d '{"repos":["https://example.com/repo/index.json"]}'
+
 # Install an extension
 curl -X POST http://localhost:4567/api/v1/extensions/install \
      -H 'Content-Type: application/json' \
@@ -494,7 +507,9 @@ with:
 - **Player** — plays every format: HLS (hls.js), DASH (dash.js), and direct
   MP4/WebM, all routed through the streaming proxy.
 - **Extension manager** — browse a repository index, install/uninstall, see
-  per-extension status (all from the "＋ Extensions" button).
+  per-extension status (all from the "＋ Extensions" button). Installed
+  extensions and your repository URLs are saved in the database and restored
+  on every start.
 - **Source settings** — a "⚙ Config" button per source renders its declared
   preferences (switches, dropdowns, text fields) and saves them.
 - **Favorites** — star titles and jump back to the last chapter you read.
@@ -785,6 +800,8 @@ Run the build and you get an APK whose `classes.dex` contains your source.
 - **Dropping the file in:** copy the APK into `<data>/extensions/` and restart.
   miwayomi discovers it, converts it, and registers the source.
 - **Through the API:** `POST /api/v1/extensions/install` with the APK URL.
+  Installed extensions are registered in the database and restored on the
+  next start.
 
 Then confirm it in the API:
 
@@ -851,10 +868,11 @@ Everything is stored in `data/cache/miwayomi.db` (SQLite, WAL mode):
 
 | Store | What it holds |
 | ----- | ------------- |
-| `kv_store` | Key-value settings (including resolved hosts `cf_ua_*`). |
+| `kv_store` | Key-value settings (including resolved hosts `cf_ua_*` and your repository URLs `user_repos`). |
 | `cookies`  | Cloudflare and site cookies, persisted across restarts. |
 | `favorites`| Favorites + last-read chapter per entry. |
 | `watch_history` | Anime watch progress per episode (resume position, duration, episode number). |
+| `extensions` | Installed extensions (package, name, version, files, install time). |
 
 Source preferences live in `data/prefs/source_<id>.properties`.
 
@@ -927,4 +945,4 @@ source), `extension/JarFixer.kt` (the cleverest file), and
 | **HLS / DASH** | Adaptive streaming formats (`.m3u8` / `.mpd`) transparently proxied. |
 | **CDP** | Chrome DevTools Protocol, used for the manual Cloudflare modal. |
 | **FlareSolverr** | Optional service that attempts to auto-solve Cloudflare challenges. |
-| **SQLite store** | Local persistence for cookies, favorites, and settings. |
+| **SQLite store** | Local persistence for cookies, favorites, watch history, installed extensions, and settings. |

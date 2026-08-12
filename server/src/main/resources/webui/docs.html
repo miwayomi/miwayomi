@@ -331,7 +331,7 @@
       <tr><td>GET/POST</td><td><code>/sources/{id}/prefs</code></td><td>Source preferences.</td></tr>
       <tr><td>GET/POST/DELETE</td><td><code>/favorites…</code></td><td>Favorites + progress.</td></tr>
       <tr><td>GET/POST/DELETE</td><td><code>/watch</code></td><td>Anime watch history (continue watching / resume).</td></tr>
-      <tr><td>GET/POST</td><td><code>/extensions/repo|install|uninstall</code></td><td>Extension manager.</td></tr>
+      <tr><td>GET/POST</td><td><code>/extensions/repo|installed|repos|install|uninstall</code></td><td>Extension manager (installed list + repo URLs persisted in the database).</td></tr>
       <tr><td>GET/POST</td><td><code>/cf/…</code></td><td>Manual Cloudflare resolution.</td></tr>
     </table>
     <pre><span class="c"># Health</span>
@@ -499,7 +499,7 @@ cp lang/en.json lang/fr.json
     <h4>3. Build &amp; install</h4>
     <ul>
       <li>Compile against the <code>source-api</code> module in this repository.</li>
-      <li>Produce an APK, then drop it into <code>&lt;data&gt;/extensions/</code> and restart — or use <code>POST /api/v1/extensions/install</code>.</li>
+      <li>Produce an APK, then drop it into <code>&lt;data&gt;/extensions/</code> and restart — or use <code>POST /api/v1/extensions/install</code>. Installed extensions are registered in the database and restored on the next start.</li>
       <li>Confirm with <code>curl http://localhost:4567/api/v1/sources</code>.</li>
     </ul>
 
@@ -522,10 +522,11 @@ cp lang/en.json lang/fr.json
     <p>Everything is stored in <code>data/cache/miwayomi.db</code> (SQLite, WAL mode):</p>
     <table>
       <tr><th>Store</th><th>What it holds</th></tr>
-      <tr><td><code>kv_store</code></td><td>Key-value settings (including resolved hosts <code>cf_ua_*</code>).</td></tr>
+      <tr><td><code>kv_store</code></td><td>Key-value settings (including resolved hosts <code>cf_ua_*</code> and your repository URLs <code>user_repos</code>).</td></tr>
       <tr><td><code>cookies</code></td><td>Cloudflare and site cookies, persisted across restarts.</td></tr>
       <tr><td><code>favorites</code></td><td>Favorites + last-read chapter per entry.</td></tr>
       <tr><td><code>watch_history</code></td><td>Anime watch progress per episode (resume position, duration, episode number).</td></tr>
+      <tr><td><code>extensions</code></td><td>Installed extensions (package, name, version, files, install time).</td></tr>
     </table>
     <p>Source preferences live in <code>data/prefs/source_&lt;id&gt;.properties</code>, and the proxied-image cache in <code>data/cache/images/</code>.</p>
 
@@ -561,7 +562,7 @@ cp lang/en.json lang/fr.json
       <tr><td>JarFixer</td><td>The ASM pass that repairs the bytecode corruption DEX→JVM conversion leaves behind (invalid <code>&lt;init&gt;</code> owners), applied automatically on first load.</td></tr>
       <tr><td>HLS / DASH</td><td>Adaptive streaming formats (<code>.m3u8</code> / <code>.mpd</code>) transparently proxied.</td></tr>
       <tr><td>CDP</td><td>Chrome DevTools Protocol, used for the manual Cloudflare modal.</td></tr>
-      <tr><td>SQLite store</td><td>Local persistence for cookies, favorites, and settings.</td></tr>
+      <tr><td>SQLite store</td><td>Local persistence for cookies, favorites, watch history, installed extensions, and settings.</td></tr>
     </table>
 
     <h2 id="legal">Legal notice &amp; disclaimer</h2>
