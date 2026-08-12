@@ -336,7 +336,6 @@ miwayomi/
 - ✅ Extensions loaded **directly from source** (Kotlin → JVM jars), see `scripts/compile-extension.sh`.
 - ✅ **Docker** — `Dockerfile` + `docker-compose.yml` (miwayomi on a slim JRE + a FlareSolverr sidecar built from source in a venv): `docker compose up -d`.
 - ✅ **GHCR images** (`ghcr.io/miwayomi/miwayomi` + `ghcr.io/miwayomi/flaresolverr`, multi-arch amd64/arm64) built by CI on every push and release.
-- ⏳ Docker Hub mirror — see [issue #3](https://github.com/miwayomi/miwayomi/issues/3).
 - ⏳ Pending: fuller WebUI (more views), per-source JS engines, torrent streaming.
 
 ## Documentation
