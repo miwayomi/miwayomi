@@ -2,6 +2,19 @@
 
 All notable changes to miwayomi.
 
+## [Unreleased]
+
+### Fixed
+- **"Continue watching" no longer repeats the same anime**: watch-history
+  entries are stored per episode, so the home row previously showed one card
+  per watched episode of the same title. It now shows a single card per anime
+  (resuming the most recently watched episode), and trailing slashes are
+  stripped from URLs so harmless URL variations never create duplicates.
+- Added a regression test for the above de-duplication logic
+  (`scripts/test-watch-dedup.js`).
+
+---
+
 ## [v0.2.8] - 2026-08-12
 
 ### Added

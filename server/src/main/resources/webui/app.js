@@ -772,9 +772,25 @@ async function clearWatchProgress() {
     await fetch(`${api}/watch?sourceId=${encodeURIComponent(e.sourceId)}&animeUrl=${encodeURIComponent(e.animeUrl)}&epUrl=${encodeURIComponent(e.epUrl)}`, { method: "DELETE" });
   } catch (err) { }
 }
+// "Continue watching" shows ONE card per anime, not one per episode. The list
+// is already ordered by most-recently-watched, so keep the first (latest)
+// entry per anime and skip repeats of the same title. Trailing slashes are
+// stripped so harmless URL variations never create duplicates.
+function dedupeWatchByAnime(list, max) {
+  const seen = new Set();
+  const out = [];
+  for (const w of list || []) {
+    const key = watchEntryKey(w.sourceId, (w.animeUrl || "").replace(/\/+$/, ""), "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(w);
+    if (max != null && out.length >= max) break;
+  }
+  return out;
+}
 async function listWatch() {
   const list = await loadWatchCache();
-  return (list || []).filter((w) => w && w.epUrl).slice(0, 12);
+  return dedupeWatchByAnime((list || []).filter((w) => w && w.epUrl), 12);
 }
 function watchCard(w) {
   const pct = w.durationSeconds ? Math.min(100, Math.round((w.timeSeconds / w.durationSeconds) * 100)) : 0;
