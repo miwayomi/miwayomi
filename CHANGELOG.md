@@ -2,7 +2,7 @@
 
 All notable changes to miwayomi.
 
-## [Unreleased]
+## [v0.2.9] - 2026-08-13
 
 ### Fixed
 - **"Continue watching" no longer repeats the same anime**: watch-history
