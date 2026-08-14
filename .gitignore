@@ -17,3 +17,6 @@ strip_comments.py
 packaging/stage/
 packaging/dist/
 miwayomi-all.jar.bak
+
+# local working copy (not uploaded)
+dev-work/
